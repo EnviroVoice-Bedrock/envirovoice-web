@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 type Props = {
-  onLogin: (name: string) => void;
+  onLogin: (name: string, serverUrl: string) => void;
 };
 
 const getAvatarUrl = (playerName: string): string => {
@@ -43,15 +43,15 @@ export const LoginPage = ({ onLogin }: Props) => {
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            onLogin(name);
+            onLogin(name, serverUrl);
           }}
         >
-          <label htmlFor="server-url">URL DEL SERVIDOR</label>
+          <label htmlFor="server-url">URL / CODIGO DE SALA</label>
           <input
             id="server-url"
             value={serverUrl}
             onChange={(event) => setServerUrl(event.target.value)}
-            placeholder="https://render.com"
+            placeholder="https://mi-servidor.com/sala-global"
             autoComplete="off"
           />
 
@@ -75,7 +75,7 @@ export const LoginPage = ({ onLogin }: Props) => {
           <button type="submit" className="button-primary button-large">
             Entrar
           </button>
-          <small className="panel-note">Solo se guarda tu nombre en esta sesion.</small>
+          <small className="panel-note">Esa URL/codigo define a que sala te conectas.</small>
         </form>
       </article>
     </section>

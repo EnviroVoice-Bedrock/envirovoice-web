@@ -1,10 +1,42 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MainLayout } from "../layouts/MainLayout";
 import { LoginPage } from "../pages/LoginPage";
 import { RoomPage } from "../pages/RoomPage";
 import { useAppStore } from "../stores/useAppStore";
 
+const DEFAULT_ROOM = "minecraft-global";
+
+const deriveRoomFromServerUrl = (input: string): string => {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) {
+    return DEFAULT_ROOM;
+  }
+
+  try {
+    const value = /^[a-z]+:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const url = new URL(value);
+    const host = url.hostname.replace(/\./g, "-");
+    const path = url.pathname.replace(/^\/+/, "").replace(/\//g, "-");
+    const combined = [host, path].filter(Boolean).join("-");
+    const normalized = combined
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    return normalized || DEFAULT_ROOM;
+  } catch {
+    const normalized = trimmed
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    return normalized || DEFAULT_ROOM;
+  }
+};
+
 export const App = () => {
+  const [targetRoomName, setTargetRoomName] = useState(DEFAULT_ROOM);
+
   const {
     session,
     currentRoom,
@@ -36,6 +68,11 @@ export const App = () => {
     clearError
   } = useAppStore();
 
+  const handleLogin = (name: string, serverUrl: string): void => {
+    setTargetRoomName(deriveRoomFromServerUrl(serverUrl));
+    setSession(name);
+  };
+
   useEffect(() => {
     initialize();
   }, [initialize]);
@@ -45,8 +82,8 @@ export const App = () => {
       return;
     }
 
-    void connectToRoomByName("minecraft-global");
-  }, [session, currentRoom, connectToRoomByName]);
+    void connectToRoomByName(targetRoomName);
+  }, [session, currentRoom, targetRoomName, connectToRoomByName]);
 
   useEffect(() => {
     if (!session || !currentRoom || ["ready", "requesting", "denied", "unavailable", "failed"].includes(voiceStatus)) {
@@ -64,7 +101,7 @@ export const App = () => {
         </div>
       )}
 
-      {!session && <LoginPage onLogin={setSession} />}
+      {!session && <LoginPage onLogin={handleLogin} />}
 
       {session && currentRoom && (
         <RoomPage
