@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+
   "services": {
     "frontend": {
       "root": ".",
@@ -8,6 +9,7 @@
       "buildCommand": "npm run build:frontend",
       "outputDirectory": "dist"
     },
+
     "backend": {
       "root": "backend",
       "framework": "express",
@@ -16,6 +18,7 @@
       "entrypoint": "src/server.ts"
     }
   },
+
   "rewrites": [
     {
       "source": "/api/(.*)",
