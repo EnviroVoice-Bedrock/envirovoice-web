@@ -1,5 +1,8 @@
 import { ParticipantList } from "../components/ParticipantList";
 import type { Room } from "../types/room";
+import envirovoiceIcon from "../../assets/envirovoice_icon.png";
+import muteIcon from "../../assets/mute.png";
+import unmuteIcon from "../../assets/unmute.png";
 
 type Props = {
   room: Room;
@@ -91,6 +94,10 @@ export const RoomPage = ({
   return (
     <section className="room-shell">
       <article className="room-card">
+        <div className="room-brand-row">
+          <img className="room-brand-icon" src={envirovoiceIcon} alt="EnviroVoice Icon" />
+          <strong className="room-brand-name">EnviroVoice</strong>
+        </div>
         <small className="section-kicker">SALA ACTIVA</small>
         <h1>{room.name}</h1>
         <p>
@@ -109,7 +116,10 @@ export const RoomPage = ({
 
         <div className="self-controls">
           <button type="button" className={`button-secondary ${selfMuted ? "button-warn" : ""}`} onClick={onToggleSelfMute}>
-            {selfMuted ? "🎙️ Activar microfono" : "🎙️ Silenciar microfono"}
+            <span className="button-with-icon">
+              <img className="control-icon" src={selfMuted ? unmuteIcon : muteIcon} alt="Mic state" />
+              {selfMuted ? "Activar microfono" : "Silenciar microfono"}
+            </span>
           </button>
           <button type="button" className={`button-secondary ${selfDeafened ? "button-warn" : ""}`} onClick={onToggleSelfDeafen}>
             {selfDeafened ? "🔊 Escuchar jugadores" : "🔇 Ensordecer"}
@@ -221,6 +231,7 @@ export const RoomPage = ({
             Cerrar sesion
           </button>
         </footer>
+        <small className="credits-line room-credits">DEVELOPED BY Halo333X, WprousG</small>
       </article>
     </section>
   );

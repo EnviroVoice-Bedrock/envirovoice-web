@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import envirovoiceLogo from "../../assets/Envirovoice Logo.png";
+import envirovoiceIcon from "../../assets/envirovoice_icon.png";
 
 type Props = {
   onLogin: (name: string, serverUrl: string) => void;
@@ -36,6 +38,12 @@ export const LoginPage = ({ onLogin }: Props) => {
         <button type="button" className="theme-toggle" onClick={toggleTheme}>
           {theme === "dark" ? "Modo claro" : "Modo oscuro"}
         </button>
+        <div className="brand-header">
+          <img className="brand-logo" src={envirovoiceLogo} alt="EnviroVoice Logo" />
+          <div className="brand-mark-wrap">
+            <img className="brand-mark" src={envirovoiceIcon} alt="EnviroVoice Icon" />
+          </div>
+        </div>
         <small className="section-kicker">INICIO DE SESION</small>
         <h1>Accede al panel</h1>
         <p>Escribe tu gamertag para continuar.</p>
@@ -76,6 +84,7 @@ export const LoginPage = ({ onLogin }: Props) => {
             Entrar
           </button>
           <small className="panel-note">Esa URL/codigo define a que sala te conectas.</small>
+          <small className="credits-line">DEVELOPED BY Halo333X, WprousG</small>
         </form>
       </article>
     </section>
