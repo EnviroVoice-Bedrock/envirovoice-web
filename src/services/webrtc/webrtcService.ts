@@ -1,8 +1,379 @@
 import { logger } from "../../utils/logger";
 
-// Placeholder for Phase 3: React components should consume this service instead of using WebRTC directly.
+type SignalSender = (message: {
+  type: "offer" | "answer" | "ice-candidate";
+  roomId: string;
+  from: string;
+  to: string;
+  payload: unknown;
+}) => void;
+
+type RemoteTrackCallback = (userId: string, stream: MediaStream) => void;
+type PeerStateCallback = (userId: string, state: RTCPeerConnectionState) => void;
+type LocalSpeakingCallback = (speaking: boolean) => void;
+
+type ServiceOptions = {
+  sendSignal: SignalSender;
+  onRemoteTrack?: RemoteTrackCallback;
+  onPeerStateChange?: PeerStateCallback;
+  onLocalSpeaking?: LocalSpeakingCallback;
+};
+
+type RoomContext = {
+  roomId: string;
+  selfId: string;
+};
+
+const rtcConfiguration: RTCConfiguration = {
+  iceServers: [
+    {
+      urls: ["stun:stun.l.google.com:19302"]
+    }
+  ]
+};
+
 export class WebRtcService {
-  initialize(): void {
-    logger.log("EnviroVoice", "WebRTC service placeholder initialized");
+  private readonly peers = new Map<string, RTCPeerConnection>();
+  private readonly remoteStreams = new Map<string, MediaStream>();
+  private readonly audioElements = new Map<string, HTMLAudioElement>();
+  private readonly deafenState = new Map<string, boolean>();
+  private readonly volumeState = new Map<string, number>();
+  private localStream: MediaStream | null = null;
+  private localAudioContext: AudioContext | null = null;
+  private localAnalyser: AnalyserNode | null = null;
+  private localSourceNode: MediaStreamAudioSourceNode | null = null;
+  private localSpeakingTimer: number | undefined;
+  private lastSpeakingState = false;
+  private context: RoomContext | null = null;
+  private readonly options: ServiceOptions;
+
+  constructor(options: ServiceOptions) {
+    this.options = options;
+  }
+
+  setContext(context: RoomContext): void {
+    this.context = context;
+  }
+
+  async ensureLocalAudio(): Promise<MediaStream> {
+    if (this.localStream) {
+      return this.localStream;
+    }
+
+    logger.log("EnviroVoice", "Requesting microphone");
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: false
+    });
+
+    this.localStream = stream;
+    this.attachLocalTracksToPeers();
+    this.startLocalSpeakingDetector(stream);
+    return stream;
+  }
+
+  setMicrophoneEnabled(enabled: boolean): void {
+    if (!this.localStream) {
+      return;
+    }
+
+    this.localStream.getAudioTracks().forEach((track) => {
+      track.enabled = enabled;
+    });
+  }
+
+  async syncRoomPeers(peerIds: string[]): Promise<void> {
+    if (!this.context) {
+      return;
+    }
+
+    const expectedPeers = new Set(peerIds.filter((peerId) => peerId !== this.context?.selfId));
+
+    for (const existingPeerId of this.peers.keys()) {
+      if (!expectedPeers.has(existingPeerId)) {
+        this.closePeer(existingPeerId);
+      }
+    }
+
+    for (const peerId of expectedPeers) {
+      this.ensurePeer(peerId);
+
+      // Deterministic initiator election avoids double-offer glare.
+      if (this.context.selfId < peerId) {
+        await this.createOffer(peerId);
+      }
+    }
+  }
+
+  async handleOffer(from: string, payload: unknown): Promise<void> {
+    const offer = (payload as { sdp?: RTCSessionDescriptionInit }).sdp;
+    if (!offer) {
+      return;
+    }
+
+    const peer = this.ensurePeer(from);
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+
+    if (this.context?.roomId && this.context.selfId) {
+      this.options.sendSignal({
+        type: "answer",
+        roomId: this.context.roomId,
+        from: this.context.selfId,
+        to: from,
+        payload: {
+          sdp: peer.localDescription
+        }
+      });
+      logger.log("EnviroVoice", "Answer created");
+    }
+  }
+
+  async handleAnswer(from: string, payload: unknown): Promise<void> {
+    const answer = (payload as { sdp?: RTCSessionDescriptionInit }).sdp;
+    if (!answer) {
+      return;
+    }
+
+    const peer = this.peers.get(from);
+    if (!peer) {
+      return;
+    }
+
+    await peer.setRemoteDescription(new RTCSessionDescription(answer));
+    logger.log("EnviroVoice", "Answer received");
+  }
+
+  async handleIceCandidate(from: string, payload: unknown): Promise<void> {
+    const candidate = (payload as { candidate?: RTCIceCandidateInit }).candidate;
+    if (!candidate) {
+      return;
+    }
+
+    const peer = this.peers.get(from);
+    if (!peer) {
+      return;
+    }
+
+    await peer.addIceCandidate(new RTCIceCandidate(candidate));
+    logger.log("EnviroVoice", "ICE candidate received");
+  }
+
+  setPeerDeafened(peerId: string, deafened: boolean): void {
+    this.deafenState.set(peerId, deafened);
+    const audio = this.audioElements.get(peerId);
+    if (audio) {
+      audio.muted = deafened;
+    }
+  }
+
+  setPeerVolume(peerId: string, volume: number): void {
+    const safeVolume = Math.max(0, Math.min(1, volume));
+    this.volumeState.set(peerId, safeVolume);
+
+    const audio = this.audioElements.get(peerId);
+    if (audio) {
+      audio.volume = safeVolume;
+    }
+  }
+
+  closePeer(peerId: string): void {
+    const peer = this.peers.get(peerId);
+    if (peer) {
+      peer.onicecandidate = null;
+      peer.ontrack = null;
+      peer.onconnectionstatechange = null;
+      peer.close();
+      this.peers.delete(peerId);
+    }
+
+    const audio = this.audioElements.get(peerId);
+    if (audio) {
+      audio.pause();
+      audio.srcObject = null;
+      this.audioElements.delete(peerId);
+    }
+
+    this.remoteStreams.delete(peerId);
+    this.deafenState.delete(peerId);
+    this.volumeState.delete(peerId);
+  }
+
+  reset(): void {
+    for (const peerId of [...this.peers.keys()]) {
+      this.closePeer(peerId);
+    }
+
+    if (this.localSpeakingTimer) {
+      window.clearInterval(this.localSpeakingTimer);
+      this.localSpeakingTimer = undefined;
+    }
+
+    this.localSourceNode?.disconnect();
+    this.localAnalyser?.disconnect();
+    this.localSourceNode = null;
+    this.localAnalyser = null;
+
+    if (this.localAudioContext) {
+      void this.localAudioContext.close();
+      this.localAudioContext = null;
+    }
+
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => track.stop());
+      this.localStream = null;
+    }
+
+    this.context = null;
+    this.lastSpeakingState = false;
+  }
+
+  private ensurePeer(peerId: string): RTCPeerConnection {
+    const existing = this.peers.get(peerId);
+    if (existing) {
+      return existing;
+    }
+
+    if (!this.context) {
+      throw new Error("WebRTC context must be set before creating peers");
+    }
+
+    logger.log("EnviroVoice", "Creating peer connection", { peerId });
+    const peer = new RTCPeerConnection(rtcConfiguration);
+
+    peer.onicecandidate = (event) => {
+      if (!event.candidate || !this.context) {
+        return;
+      }
+
+      this.options.sendSignal({
+        type: "ice-candidate",
+        roomId: this.context.roomId,
+        from: this.context.selfId,
+        to: peerId,
+        payload: {
+          candidate: event.candidate.toJSON()
+        }
+      });
+    };
+
+    peer.ontrack = (event) => {
+      const [stream] = event.streams;
+      if (!stream) {
+        return;
+      }
+
+      this.remoteStreams.set(peerId, stream);
+      this.bindAudioElement(peerId, stream);
+      logger.log("EnviroVoice", "Remote track received", { peerId });
+      this.options.onRemoteTrack?.(peerId, stream);
+    };
+
+    peer.onconnectionstatechange = () => {
+      this.options.onPeerStateChange?.(peerId, peer.connectionState);
+    };
+
+    this.peers.set(peerId, peer);
+    this.attachLocalTracks(peer);
+    return peer;
+  }
+
+  private async createOffer(peerId: string): Promise<void> {
+    if (!this.context) {
+      return;
+    }
+
+    const peer = this.ensurePeer(peerId);
+    const hasPendingLocal = Boolean(peer.currentLocalDescription || peer.pendingLocalDescription);
+    if (peer.signalingState !== "stable" || hasPendingLocal) {
+      return;
+    }
+
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+
+    this.options.sendSignal({
+      type: "offer",
+      roomId: this.context.roomId,
+      from: this.context.selfId,
+      to: peerId,
+      payload: {
+        sdp: peer.localDescription
+      }
+    });
+    logger.log("EnviroVoice", "Offer created", { peerId });
+  }
+
+  private attachLocalTracks(peer: RTCPeerConnection): void {
+    if (!this.localStream) {
+      return;
+    }
+
+    const senders = peer.getSenders();
+    const senderTrackIds = new Set(senders.map((sender) => sender.track?.id).filter((id): id is string => Boolean(id)));
+
+    for (const track of this.localStream.getTracks()) {
+      if (!senderTrackIds.has(track.id)) {
+        peer.addTrack(track, this.localStream);
+      }
+    }
+  }
+
+  private attachLocalTracksToPeers(): void {
+    for (const peer of this.peers.values()) {
+      this.attachLocalTracks(peer);
+    }
+  }
+
+  private bindAudioElement(peerId: string, stream: MediaStream): void {
+    let audio = this.audioElements.get(peerId);
+    if (!audio) {
+      audio = new Audio();
+      audio.autoplay = true;
+      this.audioElements.set(peerId, audio);
+    }
+
+    audio.srcObject = stream;
+    audio.muted = this.deafenState.get(peerId) ?? false;
+    audio.volume = this.volumeState.get(peerId) ?? 1;
+    void audio.play().catch((err) => {
+      logger.error("EnviroVoice", "Autoplay blocked for remote audio", err);
+    });
+  }
+
+  private startLocalSpeakingDetector(stream: MediaStream): void {
+    if (this.localSpeakingTimer) {
+      return;
+    }
+
+    this.localAudioContext = new AudioContext();
+    this.localAnalyser = this.localAudioContext.createAnalyser();
+    this.localAnalyser.fftSize = 512;
+    this.localSourceNode = this.localAudioContext.createMediaStreamSource(stream);
+    this.localSourceNode.connect(this.localAnalyser);
+
+    const data = new Uint8Array(this.localAnalyser.frequencyBinCount);
+
+    this.localSpeakingTimer = window.setInterval(() => {
+      if (!this.localAnalyser) {
+        return;
+      }
+
+      this.localAnalyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (const value of data) {
+        const normalized = (value - 128) / 128;
+        sum += normalized * normalized;
+      }
+
+      const rms = Math.sqrt(sum / data.length);
+      const speaking = rms > 0.04;
+
+      if (speaking !== this.lastSpeakingState) {
+        this.lastSpeakingState = speaking;
+        this.options.onLocalSpeaking?.(speaking);
+      }
+    }, 250);
   }
 }

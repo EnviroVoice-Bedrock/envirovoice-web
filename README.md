@@ -100,3 +100,49 @@ npm run build
 ```
 
 This builds frontend and backend TypeScript outputs.
+
+## Deploy (Vercel)
+
+This repository can be deployed to Vercel as a frontend app.
+
+Important:
+
+- Vercel is used here for the React web frontend.
+- The backend WebSocket signaling server should be deployed separately (Render, Railway, Fly.io, etc.).
+- Then set frontend environment variables in Vercel to point to that backend.
+
+### 1. Deploy backend first (recommended)
+
+Deploy [backend](backend) to a host that supports long-lived WebSocket connections.
+
+Expected endpoints after deploy:
+
+- API: `https://your-backend-domain`
+- WebSocket: `wss://your-backend-domain`
+
+### 2. Deploy frontend to Vercel
+
+This repo includes [vercel.json](vercel.json) configured for Vite frontend output:
+
+- buildCommand: `npm run build:frontend`
+- outputDirectory: `dist`
+
+### 3. Set environment variables in Vercel project
+
+- `VITE_API_URL` = `https://your-backend-domain`
+- `VITE_SIGNALING_URL` = `wss://your-backend-domain`
+
+### 4. CLI deploy (optional)
+
+1. `npm i -g vercel`
+2. `vercel login`
+3. From project root: `vercel`
+4. Production deploy: `vercel --prod`
+
+### 5. Quick post-deploy checks
+
+1. Open frontend URL from Vercel.
+2. Login with a test gamertag.
+3. Verify room join/create works.
+4. Open a second browser/tab and verify both users appear.
+5. Verify microphone permission prompt and WebRTC voice flow.

@@ -8,6 +8,7 @@ export const App = () => {
   const {
     session,
     currentRoom,
+    voiceStatus,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
@@ -15,6 +16,7 @@ export const App = () => {
     setSession,
     initialize,
     connectToRoomByName,
+    startVoice,
     leaveRoom,
     setSelfMuted,
     setSelfDeafened,
@@ -34,6 +36,14 @@ export const App = () => {
 
     void connectToRoomByName("minecraft-global");
   }, [session, currentRoom, connectToRoomByName]);
+
+  useEffect(() => {
+    if (!session || !currentRoom || ["ready", "requesting", "denied", "unavailable", "failed"].includes(voiceStatus)) {
+      return;
+    }
+
+    void startVoice();
+  }, [session, currentRoom, voiceStatus, startVoice]);
 
   return (
     <MainLayout>
@@ -61,6 +71,8 @@ export const App = () => {
       )}
 
       {session && !currentRoom && <div className="loading-room">Entrando a la sala...</div>}
+
+      {session && currentRoom && voiceStatus === "requesting" && <div className="loading-room">Solicitando acceso al microfono...</div>}
     </MainLayout>
   );
 };

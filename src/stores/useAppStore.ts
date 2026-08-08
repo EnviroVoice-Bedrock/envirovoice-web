@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { apiClient } from "../services/api/client";
 import { SignalingClient } from "../services/signaling/signalingClient";
+import { WebRtcService } from "../services/webrtc/webrtcService";
 import type { Room, RoomUser } from "../types/room";
 import type { ConnectionStatus } from "../types/signaling";
 import { logger } from "../utils/logger";
@@ -15,6 +16,8 @@ type AppState = {
   rooms: Room[];
   currentRoom: Room | null;
   connectionStatus: ConnectionStatus;
+  voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
+  peerStates: Record<string, RTCPeerConnectionState>;
   isSelfMuted: boolean;
   isSelfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
@@ -26,6 +29,7 @@ type AppState = {
   connectToRoomByName: (roomName: string) => Promise<void>;
   createRoom: (name: string) => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
+  startVoice: () => Promise<void>;
   leaveRoom: () => Promise<void>;
   setSelfMuted: (muted: boolean) => void;
   setSelfDeafened: (deafened: boolean) => void;
@@ -60,6 +64,49 @@ const upsertRoom = (rooms: Room[], room: Room): Room[] => {
 
 export const useAppStore = create<AppState>((set, get) => {
   const signaling = new SignalingClient();
+  const webrtc = new WebRtcService({
+    sendSignal: (message) => {
+      signaling.send(message);
+    },
+    onPeerStateChange: (userId, state) => {
+      set((store) => ({
+        peerStates: {
+          ...store.peerStates,
+          [userId]: state
+        }
+      }));
+
+      if (state === "failed") {
+        set({ errorMessage: "WebRTC failed" });
+      }
+    },
+    onLocalSpeaking: (speaking) => {
+      const { session, currentRoom } = get();
+      if (!session || !currentRoom) {
+        return;
+      }
+
+      set((store) => {
+        if (!store.currentRoom) {
+          return store;
+        }
+
+        return {
+          currentRoom: {
+            ...store.currentRoom,
+            users: store.currentRoom.users.map((user) => (user.id === session.id ? { ...user, speaking } : user))
+          }
+        };
+      });
+
+      signaling.send({
+        type: "speaking-state",
+        roomId: currentRoom.id,
+        from: session.id,
+        payload: { speaking }
+      });
+    }
+  });
 
   signaling.onStatusChange((status) => {
     set({ connectionStatus: status });
@@ -72,6 +119,12 @@ export const useAppStore = create<AppState>((set, get) => {
         currentRoom: state.currentRoom?.id === room.id ? room : state.currentRoom,
         rooms: upsertRoom(state.rooms, room)
       }));
+
+      const { session, currentRoom } = get();
+      if (session && currentRoom?.id === room.id) {
+        webrtc.setContext({ roomId: room.id, selfId: session.id });
+        void webrtc.syncRoomPeers(room.users.map((user) => user.id));
+      }
       return;
     }
 
@@ -93,6 +146,41 @@ export const useAppStore = create<AppState>((set, get) => {
 
     if (message.type === "user-left") {
       logger.log("Rooms", "User left", message.payload);
+      if (message.from) {
+        webrtc.closePeer(message.from);
+      }
+      return;
+    }
+
+    if (message.type === "offer" && message.from) {
+      void webrtc.handleOffer(message.from, message.payload);
+      return;
+    }
+
+    if (message.type === "answer" && message.from) {
+      void webrtc.handleAnswer(message.from, message.payload);
+      return;
+    }
+
+    if (message.type === "ice-candidate" && message.from) {
+      void webrtc.handleIceCandidate(message.from, message.payload);
+      return;
+    }
+
+    if (message.type === "speaking-state" && message.from) {
+      const speaking = Boolean((message.payload as { speaking?: unknown } | undefined)?.speaking);
+      set((state) => {
+        if (!state.currentRoom) {
+          return state;
+        }
+
+        return {
+          currentRoom: {
+            ...state.currentRoom,
+            users: state.currentRoom.users.map((user) => (user.id === message.from ? { ...user, speaking } : user))
+          }
+        };
+      });
       return;
     }
 
@@ -107,6 +195,8 @@ export const useAppStore = create<AppState>((set, get) => {
     rooms: [],
     currentRoom: null,
     connectionStatus: "disconnected",
+    voiceStatus: "idle",
+    peerStates: {},
     isSelfMuted: false,
     isSelfDeafened: false,
     deafenedUsers: {},
@@ -212,6 +302,38 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
+    startVoice: async () => {
+      const { session, currentRoom, isSelfMuted } = get();
+      if (!session || !currentRoom) {
+        return;
+      }
+
+      webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
+      set({ voiceStatus: "requesting" });
+
+      try {
+        await webrtc.ensureLocalAudio();
+        webrtc.setMicrophoneEnabled(!isSelfMuted);
+        set({ voiceStatus: "ready", errorMessage: null });
+        await webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
+      } catch (err) {
+        logger.error("EnviroVoice", "Microphone setup failed", err);
+
+        const errorName = err instanceof DOMException ? err.name : "Unknown";
+        if (errorName === "NotAllowedError") {
+          set({ voiceStatus: "denied", errorMessage: "Microphone denied" });
+          return;
+        }
+
+        if (errorName === "NotFoundError" || errorName === "NotReadableError") {
+          set({ voiceStatus: "unavailable", errorMessage: "Microphone unavailable" });
+          return;
+        }
+
+        set({ voiceStatus: "failed", errorMessage: "No microphone" });
+      }
+    },
+
     leaveRoom: async () => {
       const { session, currentRoom } = get();
       if (!session || !currentRoom) {
@@ -233,10 +355,14 @@ export const useAppStore = create<AppState>((set, get) => {
 
       set({
         currentRoom: null,
+        voiceStatus: "idle",
+        peerStates: {},
         isSelfMuted: false,
         isSelfDeafened: false,
         deafenedUsers: {}
       });
+
+      webrtc.reset();
 
       await get().fetchRooms();
     },
@@ -249,6 +375,8 @@ export const useAppStore = create<AppState>((set, get) => {
         currentRoom: session && state.currentRoom ? updateLocalUser(state.currentRoom, session.id, muted) : state.currentRoom
       }));
 
+      webrtc.setMicrophoneEnabled(!muted);
+
       if (session && currentRoom) {
         signaling.send({
           type: "mute-state",
@@ -260,16 +388,29 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     setSelfDeafened: (deafened) => {
+      const { currentRoom, session } = get();
+      if (currentRoom && session) {
+        for (const user of currentRoom.users) {
+          if (user.id !== session.id) {
+            webrtc.setPeerDeafened(user.id, deafened);
+          }
+        }
+      }
+
       set({ isSelfDeafened: deafened });
     },
 
     toggleUserDeafen: (userId) => {
+      const nextState = !get().deafenedUsers[userId];
+
       set((state) => ({
         deafenedUsers: {
           ...state.deafenedUsers,
-          [userId]: !state.deafenedUsers[userId]
+          [userId]: nextState
         }
       }));
+
+      webrtc.setPeerDeafened(userId, nextState);
     },
 
     logout: async () => {
@@ -283,11 +424,15 @@ export const useAppStore = create<AppState>((set, get) => {
         session: null,
         rooms: [],
         currentRoom: null,
+        voiceStatus: "idle",
+        peerStates: {},
         isSelfMuted: false,
         isSelfDeafened: false,
         deafenedUsers: {},
         errorMessage: null
       });
+
+      webrtc.reset();
     },
 
     clearError: () => {
