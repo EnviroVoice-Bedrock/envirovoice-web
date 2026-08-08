@@ -9,6 +9,11 @@ export const App = () => {
     session,
     currentRoom,
     voiceStatus,
+    localMicLevel,
+    micSensitivity,
+    monitorSelfVoice,
+    availableMicrophones,
+    selectedMicrophoneId,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
@@ -17,6 +22,10 @@ export const App = () => {
     initialize,
     connectToRoomByName,
     startVoice,
+    refreshMicrophones,
+    setMicrophone,
+    setMicSensitivity,
+    setMonitorSelfVoice,
     leaveRoom,
     setSelfMuted,
     setSelfDeafened,
@@ -59,9 +68,20 @@ export const App = () => {
         <RoomPage
           room={currentRoom}
           userId={session.id}
+          voiceStatus={voiceStatus}
+          localMicLevel={localMicLevel}
+          micSensitivity={micSensitivity}
+          monitorSelfVoice={monitorSelfVoice}
+          availableMicrophones={availableMicrophones}
+          selectedMicrophoneId={selectedMicrophoneId}
           selfMuted={isSelfMuted}
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
+          onRefreshMicrophones={refreshMicrophones}
+          onSetMicrophone={setMicrophone}
+          onSetMicSensitivity={setMicSensitivity}
+          onSetMonitorSelfVoice={setMonitorSelfVoice}
+          onStartVoice={startVoice}
           onToggleSelfMute={() => setSelfMuted(!isSelfMuted)}
           onToggleSelfDeafen={() => setSelfDeafened(!isSelfDeafened)}
           onToggleUserDeafen={toggleUserDeafen}

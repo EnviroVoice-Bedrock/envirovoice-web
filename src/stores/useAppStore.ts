@@ -11,6 +11,11 @@ type UserSession = {
   name: string;
 };
 
+type MicrophoneOption = {
+  id: string;
+  label: string;
+};
+
 type AppState = {
   session: UserSession | null;
   rooms: Room[];
@@ -20,6 +25,11 @@ type AppState = {
   peerStates: Record<string, RTCPeerConnectionState>;
   isSelfMuted: boolean;
   isSelfDeafened: boolean;
+  micSensitivity: number;
+  localMicLevel: number;
+  monitorSelfVoice: boolean;
+  availableMicrophones: MicrophoneOption[];
+  selectedMicrophoneId: string | null;
   deafenedUsers: Record<string, boolean>;
   errorMessage: string | null;
   signaling: SignalingClient;
@@ -30,6 +40,10 @@ type AppState = {
   createRoom: (name: string) => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
   startVoice: () => Promise<void>;
+  refreshMicrophones: () => Promise<void>;
+  setMicrophone: (deviceId: string | null) => Promise<void>;
+  setMicSensitivity: (value: number) => void;
+  setMonitorSelfVoice: (enabled: boolean) => void;
   leaveRoom: () => Promise<void>;
   setSelfMuted: (muted: boolean) => void;
   setSelfDeafened: (deafened: boolean) => void;
@@ -105,6 +119,9 @@ export const useAppStore = create<AppState>((set, get) => {
         from: session.id,
         payload: { speaking }
       });
+    },
+    onLocalLevel: (level) => {
+      set({ localMicLevel: level });
     }
   });
 
@@ -199,6 +216,11 @@ export const useAppStore = create<AppState>((set, get) => {
     peerStates: {},
     isSelfMuted: false,
     isSelfDeafened: false,
+    micSensitivity: 40,
+    localMicLevel: 0,
+    monitorSelfVoice: false,
+    availableMicrophones: [],
+    selectedMicrophoneId: null,
     deafenedUsers: {},
     errorMessage: null,
     signaling,
@@ -221,6 +243,70 @@ export const useAppStore = create<AppState>((set, get) => {
 
     initialize: () => {
       signaling.connect();
+      void get().refreshMicrophones();
+    },
+
+    refreshMicrophones: async () => {
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        set({ availableMicrophones: [], selectedMicrophoneId: null });
+        return;
+      }
+
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const microphones = devices
+          .filter((device) => device.kind === "audioinput")
+          .map((device, index) => ({
+            id: device.deviceId,
+            label: device.label || `Microfono ${index + 1}`
+          }));
+
+        set((state) => {
+          const selectedExists = state.selectedMicrophoneId
+            ? microphones.some((mic) => mic.id === state.selectedMicrophoneId)
+            : false;
+
+          const nextSelectedId = selectedExists ? state.selectedMicrophoneId : (microphones[0]?.id ?? null);
+
+          webrtc.configureInput(nextSelectedId);
+
+          return {
+            availableMicrophones: microphones,
+            selectedMicrophoneId: nextSelectedId
+          };
+        });
+      } catch (err) {
+        logger.error("EnviroVoice", "Failed to enumerate microphones", err);
+      }
+    },
+
+    setMicrophone: async (deviceId) => {
+      const nextId = deviceId || null;
+      webrtc.configureInput(nextId);
+      set({ selectedMicrophoneId: nextId });
+
+      if (get().voiceStatus !== "ready") {
+        return;
+      }
+
+      try {
+        await webrtc.restartLocalAudio();
+      } catch (err) {
+        logger.error("EnviroVoice", "Failed to switch microphone", err);
+        set({ errorMessage: "No se pudo cambiar el microfono" });
+      }
+    },
+
+    setMicSensitivity: (value) => {
+      const safeValue = Math.max(1, Math.min(100, Math.round(value)));
+      const threshold = 0.02 + ((100 - safeValue) / 100) * 0.1;
+      webrtc.setSpeakingThreshold(threshold);
+      set({ micSensitivity: safeValue });
+    },
+
+    setMonitorSelfVoice: (enabled) => {
+      webrtc.setSelfMonitor(enabled);
+      set({ monitorSelfVoice: enabled });
     },
 
     fetchRooms: async () => {
@@ -303,16 +389,20 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     startVoice: async () => {
-      const { session, currentRoom, isSelfMuted } = get();
+      const { session, currentRoom, isSelfMuted, selectedMicrophoneId, micSensitivity, monitorSelfVoice } = get();
       if (!session || !currentRoom) {
         return;
       }
 
       webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
+      webrtc.configureInput(selectedMicrophoneId);
+      webrtc.setSelfMonitor(monitorSelfVoice);
+      webrtc.setSpeakingThreshold(0.02 + ((100 - micSensitivity) / 100) * 0.1);
       set({ voiceStatus: "requesting" });
 
       try {
         await webrtc.ensureLocalAudio();
+        await get().refreshMicrophones();
         webrtc.setMicrophoneEnabled(!isSelfMuted);
         set({ voiceStatus: "ready", errorMessage: null });
         await webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
@@ -359,6 +449,7 @@ export const useAppStore = create<AppState>((set, get) => {
         peerStates: {},
         isSelfMuted: false,
         isSelfDeafened: false,
+        localMicLevel: 0,
         deafenedUsers: {}
       });
 
@@ -428,6 +519,7 @@ export const useAppStore = create<AppState>((set, get) => {
         peerStates: {},
         isSelfMuted: false,
         isSelfDeafened: false,
+        localMicLevel: 0,
         deafenedUsers: {},
         errorMessage: null
       });

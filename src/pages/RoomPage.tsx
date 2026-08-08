@@ -4,9 +4,20 @@ import type { Room } from "../types/room";
 type Props = {
   room: Room;
   userId: string;
+  voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
+  localMicLevel: number;
+  micSensitivity: number;
+  monitorSelfVoice: boolean;
+  availableMicrophones: Array<{ id: string; label: string }>;
+  selectedMicrophoneId: string | null;
   selfMuted: boolean;
   selfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
+  onRefreshMicrophones: () => Promise<void>;
+  onSetMicrophone: (deviceId: string | null) => Promise<void>;
+  onSetMicSensitivity: (value: number) => void;
+  onSetMonitorSelfVoice: (enabled: boolean) => void;
+  onStartVoice: () => Promise<void>;
   onToggleSelfMute: () => void;
   onToggleSelfDeafen: () => void;
   onToggleUserDeafen: (userId: string) => void;
@@ -27,9 +38,20 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
 export const RoomPage = ({
   room,
   userId,
+  voiceStatus,
+  localMicLevel,
+  micSensitivity,
+  monitorSelfVoice,
+  availableMicrophones,
+  selectedMicrophoneId,
   selfMuted,
   selfDeafened,
   deafenedUsers,
+  onRefreshMicrophones,
+  onSetMicrophone,
+  onSetMicSensitivity,
+  onSetMonitorSelfVoice,
+  onStartVoice,
   onToggleSelfMute,
   onToggleSelfDeafen,
   onToggleUserDeafen,
@@ -48,6 +70,19 @@ export const RoomPage = ({
       const distanceB = getDistance(selfUser.position.x, selfUser.position.y, selfUser.position.z, b.position.x, b.position.y, b.position.z);
       return distanceA - distanceB;
     });
+
+  const micStatusText =
+    voiceStatus === "ready"
+      ? "Voz activa"
+      : voiceStatus === "requesting"
+        ? "Solicitando acceso al microfono..."
+        : voiceStatus === "denied"
+          ? "Permiso de microfono denegado"
+          : voiceStatus === "unavailable"
+            ? "No hay microfono disponible"
+            : voiceStatus === "failed"
+              ? "Error al iniciar voz"
+              : "Voz inactiva";
 
   return (
     <section className="room-shell">
@@ -76,6 +111,69 @@ export const RoomPage = ({
             {selfDeafened ? "🔊 Escuchar jugadores" : "🔇 Ensordecer"}
           </button>
         </div>
+
+        <section className="voice-settings" aria-label="Ajustes de voz">
+          <div className="voice-settings-head">
+            <h2>Ajustes de voz</h2>
+            <span className={`voice-status voice-status-${voiceStatus}`}>{micStatusText}</span>
+          </div>
+
+          <div className="voice-controls-grid">
+            <label htmlFor="microphone-select">Microfono</label>
+            <div className="voice-inline-row">
+              <select
+                id="microphone-select"
+                value={selectedMicrophoneId ?? ""}
+                onChange={(event) => void onSetMicrophone(event.target.value || null)}
+              >
+                {availableMicrophones.length === 0 && <option value="">Sin microfonos detectados</option>}
+                {availableMicrophones.map((mic) => (
+                  <option key={mic.id} value={mic.id}>
+                    {mic.label}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="button-secondary" onClick={() => void onRefreshMicrophones()}>
+                Actualizar
+              </button>
+            </div>
+
+            <label htmlFor="sensitivity-range">Sensibilidad de voz: {micSensitivity}%</label>
+            <input
+              id="sensitivity-range"
+              type="range"
+              min={1}
+              max={100}
+              value={micSensitivity}
+              onChange={(event) => onSetMicSensitivity(Number(event.target.value))}
+            />
+
+            <label htmlFor="self-monitor" className="checkbox-row">
+              <input
+                id="self-monitor"
+                type="checkbox"
+                checked={monitorSelfVoice}
+                onChange={(event) => onSetMonitorSelfVoice(event.target.checked)}
+              />
+              Escuchar mi propia voz (prueba local)
+            </label>
+
+            <div>
+              <small>Nivel de entrada</small>
+              <div className="mic-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(localMicLevel * 100)}>
+                <div className="mic-meter-fill" style={{ width: `${Math.max(4, Math.round(localMicLevel * 100))}%` }} />
+              </div>
+            </div>
+
+            <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
+              {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
+            </button>
+          </div>
+
+          <p className="panel-note">
+            Puedes probar sin Minecraft abriendo esta web en dos pestañas con usuarios distintos en la misma sala.
+          </p>
+        </section>
 
         <div className="nearby-header">
           <h2>Jugadores cerca</h2>
