@@ -55,14 +55,6 @@ body {
   padding: clamp(18px, 3vw, 26px);
 }
 
-.enviro-login-card {
-  width: min(900px, 100%);
-  background: linear-gradient(180deg, rgba(14, 15, 19, 0.98), rgba(16, 18, 23, 0.98));
-  border-color: #2a2e38;
-  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.5);
-  padding: clamp(24px, 4vw, 42px);
-}
-
 .brand-header {
   display: flex;
   justify-content: space-between;
@@ -72,10 +64,10 @@ body {
 }
 
 .brand-logo {
-  width: clamp(320px, 54vw, 700px);
+  width: clamp(180px, 38vw, 280px);
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 10px 26px rgba(76, 209, 229, 0.26));
+  filter: drop-shadow(0 6px 16px rgba(30, 84, 124, 0.28));
 }
 
 .brand-mark-wrap {
@@ -91,14 +83,6 @@ body {
 .brand-mark {
   width: 28px;
   height: 28px;
-}
-
-.enviro-subtitle {
-  margin: 6px 0 20px;
-  color: #7c8394;
-  font-size: 1.08rem;
-  letter-spacing: 0.09em;
-  font-weight: 700;
 }
 
 .section-kicker {
@@ -189,11 +173,6 @@ label {
   font-weight: 700;
 }
 
-.enviro-login-card label {
-  color: #6f7585;
-  font-size: 1.02rem;
-}
-
 input {
   width: 100%;
   border: 1px solid #345676;
@@ -202,19 +181,6 @@ input {
   color: var(--text);
   padding: 11px 13px;
   font-size: 1.05rem;
-}
-
-.enviro-login-card input {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  padding: 0;
-  font-size: 1.65rem;
-  font-weight: 600;
-}
-
-.enviro-login-card input::placeholder {
-  color: #4f596e;
 }
 
 input:focus,
@@ -263,32 +229,6 @@ select:focus {
   font-size: 1.4rem;
 }
 
-.field-shell {
-  border: 1px solid #2f3340;
-  border-radius: 17px;
-  background: #181a20;
-  min-height: 64px;
-  padding: 0 16px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.field-shell:focus-within {
-  border-color: #4f607d;
-}
-
-.field-icon {
-  color: #68728a;
-  font-size: 1.2rem;
-}
-
-.field-chevron {
-  color: #636d84;
-  font-size: 1.2rem;
-}
-
 .panel-note {
   color: #84a6be;
   font-weight: 600;
@@ -300,14 +240,6 @@ select:focus {
   font-size: 0.82rem;
   text-align: center;
   margin-top: 4px;
-}
-
-.credits-names {
-  color: #eff3ff;
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  margin-top: 0;
 }
 
 button {
@@ -331,17 +263,6 @@ button:hover {
   color: #0d2b3f;
   border-color: rgba(154, 220, 245, 0.68);
   box-shadow: 0 6px 18px rgba(41, 124, 190, 0.3);
-}
-
-.join-room-button {
-  min-height: 78px;
-  border-radius: 18px;
-  font-size: 2.1rem;
-  margin-top: 6px;
-  background: linear-gradient(90deg, #656cf7, #4a32e8);
-  color: #f6f8ff;
-  border-color: rgba(139, 146, 255, 0.6);
-  box-shadow: 0 14px 28px rgba(73, 59, 193, 0.42);
 }
 
 .button-secondary {
@@ -724,41 +645,5 @@ input[type="range"] {
   .brand-header {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .brand-mark-wrap {
-    display: none;
-  }
-
-  .brand-logo {
-    width: min(100%, 420px);
-  }
-
-  .enviro-subtitle {
-    font-size: 0.92rem;
-    margin-bottom: 14px;
-  }
-
-  .enviro-login-card label {
-    font-size: 0.86rem;
-  }
-
-  .field-shell {
-    min-height: 54px;
-    border-radius: 12px;
-  }
-
-  .enviro-login-card input {
-    font-size: 1.2rem;
-  }
-
-  .join-room-button {
-    min-height: 58px;
-    border-radius: 12px;
-    font-size: 1.35rem;
-  }
-
-  .credits-names {
-    font-size: 1.25rem;
   }
 }
