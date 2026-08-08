@@ -1,6 +1,5 @@
 import { ParticipantList } from "../components/ParticipantList";
 import type { Room } from "../types/room";
-import envirovoiceIcon from "../../assets/envirovoice_icon.png";
 import muteIcon from "../../assets/mute.png";
 import unmuteIcon from "../../assets/unmute.png";
 
@@ -95,7 +94,6 @@ export const RoomPage = ({
     <section className="room-shell">
       <article className="room-card">
         <div className="room-brand-row">
-          <img className="room-brand-icon" src={envirovoiceIcon} alt="EnviroVoice Icon" />
           <strong className="room-brand-name">EnviroVoice</strong>
         </div>
         <small className="section-kicker">SALA ACTIVA</small>
