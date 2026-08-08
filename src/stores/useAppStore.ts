@@ -11,6 +11,8 @@ type UserSession = {
   name: string;
 };
 
+type VoiceMode = "call" | "minecraft";
+
 type MicrophoneOption = {
   id: string;
   label: string;
@@ -20,6 +22,7 @@ type AppState = {
   session: UserSession | null;
   rooms: Room[];
   currentRoom: Room | null;
+  voiceMode: VoiceMode;
   connectionStatus: ConnectionStatus;
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   peerStates: Record<string, RTCPeerConnectionState>;
@@ -34,6 +37,7 @@ type AppState = {
   errorMessage: string | null;
   signaling: SignalingClient;
   setSession: (name: string) => void;
+  setVoiceMode: (mode: VoiceMode) => void;
   initialize: () => void;
   fetchRooms: () => Promise<void>;
   connectToRoomByName: (roomName: string) => Promise<void>;
@@ -74,6 +78,33 @@ const upsertRoom = (rooms: Room[], room: Room): Room[] => {
   const cloned = [...rooms];
   cloned[index] = room;
   return cloned;
+};
+
+const hasMinecraftPosition = (user: RoomUser): boolean => {
+  const p = user.position;
+  return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
+};
+
+const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser): number => {
+  if (!hasMinecraftPosition(selfUser) || !hasMinecraftPosition(otherUser)) {
+    return 0;
+  }
+
+  if (selfUser.position.dimension !== otherUser.position.dimension) {
+    return 0;
+  }
+
+  const dx = selfUser.position.x - otherUser.position.x;
+  const dy = selfUser.position.y - otherUser.position.y;
+  const dz = selfUser.position.z - otherUser.position.z;
+  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  const maxDistance = 80;
+
+  if (distance >= maxDistance) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(1, 1 - distance / maxDistance));
 };
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -129,6 +160,30 @@ export const useAppStore = create<AppState>((set, get) => {
     set({ connectionStatus: status });
   });
 
+  const applyVoiceMix = (): void => {
+    const { currentRoom, session, voiceMode, isSelfDeafened, deafenedUsers } = get();
+    if (!currentRoom || !session) {
+      return;
+    }
+
+    const selfUser = currentRoom.users.find((user) => user.id === session.id);
+    if (!selfUser) {
+      return;
+    }
+
+    for (const user of currentRoom.users) {
+      if (user.id === session.id) {
+        continue;
+      }
+
+      const manuallyDeafened = Boolean(deafenedUsers[user.id]) || isSelfDeafened;
+      const volume = voiceMode === "call" ? 1 : computeMinecraftVolume(selfUser, user);
+
+      webrtc.setPeerDeafened(user.id, manuallyDeafened);
+      webrtc.setPeerVolume(user.id, manuallyDeafened ? 0 : volume);
+    }
+  };
+
   signaling.onMessage((message) => {
     if (message.type === "room-state" && message.payload) {
       const room = message.payload as Room;
@@ -136,6 +191,8 @@ export const useAppStore = create<AppState>((set, get) => {
         currentRoom: state.currentRoom?.id === room.id ? room : state.currentRoom,
         rooms: upsertRoom(state.rooms, room)
       }));
+
+      applyVoiceMix();
 
       const { session, currentRoom } = get();
       if (session && currentRoom?.id === room.id) {
@@ -211,6 +268,7 @@ export const useAppStore = create<AppState>((set, get) => {
     session: null,
     rooms: [],
     currentRoom: null,
+    voiceMode: "call",
     connectionStatus: "disconnected",
     voiceStatus: "idle",
     peerStates: {},
@@ -239,6 +297,21 @@ export const useAppStore = create<AppState>((set, get) => {
         },
         errorMessage: null
       });
+    },
+
+    setVoiceMode: (mode) => {
+      set({ voiceMode: mode });
+
+      if (mode === "minecraft") {
+        const { currentRoom, session } = get();
+        const selfUser = currentRoom?.users.find((user) => user.id === session?.id);
+        const hasData = Boolean(selfUser && hasMinecraftPosition(selfUser));
+        if (!hasData) {
+          set({ errorMessage: "Modo Minecraft activo: esperando datos de posicion del addon" });
+        }
+      }
+
+      applyVoiceMix();
     },
 
     initialize: () => {
@@ -406,6 +479,16 @@ export const useAppStore = create<AppState>((set, get) => {
         webrtc.setMicrophoneEnabled(!isSelfMuted);
         set({ voiceStatus: "ready", errorMessage: null });
         await webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
+        applyVoiceMix();
+
+        const { voiceMode } = get();
+        if (voiceMode === "minecraft") {
+          const selfUser = currentRoom.users.find((user) => user.id === session.id);
+          const hasData = Boolean(selfUser && hasMinecraftPosition(selfUser));
+          if (!hasData) {
+            set({ errorMessage: "Modo Minecraft activo: esperando datos de posicion del addon" });
+          }
+        }
       } catch (err) {
         logger.error("EnviroVoice", "Microphone setup failed", err);
 
@@ -479,16 +562,8 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     setSelfDeafened: (deafened) => {
-      const { currentRoom, session } = get();
-      if (currentRoom && session) {
-        for (const user of currentRoom.users) {
-          if (user.id !== session.id) {
-            webrtc.setPeerDeafened(user.id, deafened);
-          }
-        }
-      }
-
       set({ isSelfDeafened: deafened });
+      applyVoiceMix();
     },
 
     toggleUserDeafen: (userId) => {
@@ -500,8 +575,7 @@ export const useAppStore = create<AppState>((set, get) => {
           [userId]: nextState
         }
       }));
-
-      webrtc.setPeerDeafened(userId, nextState);
+      applyVoiceMix();
     },
 
     logout: async () => {

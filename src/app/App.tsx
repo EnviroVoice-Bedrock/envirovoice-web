@@ -8,6 +8,7 @@ export const App = () => {
   const {
     session,
     currentRoom,
+    voiceMode,
     voiceStatus,
     localMicLevel,
     micSensitivity,
@@ -19,6 +20,7 @@ export const App = () => {
     deafenedUsers,
     errorMessage,
     setSession,
+    setVoiceMode,
     initialize,
     connectToRoomByName,
     startVoice,
@@ -68,6 +70,7 @@ export const App = () => {
         <RoomPage
           room={currentRoom}
           userId={session.id}
+          voiceMode={voiceMode}
           voiceStatus={voiceStatus}
           localMicLevel={localMicLevel}
           micSensitivity={micSensitivity}
@@ -82,6 +85,7 @@ export const App = () => {
           onSetMicSensitivity={setMicSensitivity}
           onSetMonitorSelfVoice={setMonitorSelfVoice}
           onStartVoice={startVoice}
+          onSetVoiceMode={setVoiceMode}
           onToggleSelfMute={() => setSelfMuted(!isSelfMuted)}
           onToggleSelfDeafen={() => setSelfDeafened(!isSelfDeafened)}
           onToggleUserDeafen={toggleUserDeafen}

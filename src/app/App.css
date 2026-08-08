@@ -362,6 +362,19 @@ button:disabled {
   gap: 10px;
 }
 
+.voice-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mode-active {
+  border-color: #4ea8c7;
+  background: #1a3650;
+  color: #cde9f6;
+}
+
 .voice-inline-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -521,6 +534,10 @@ input[type="range"] {
   }
 
   .voice-inline-row {
+    grid-template-columns: 1fr;
+  }
+
+  .voice-mode-toggle {
     grid-template-columns: 1fr;
   }
 }

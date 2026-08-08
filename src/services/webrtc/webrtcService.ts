@@ -26,13 +26,29 @@ type RoomContext = {
   selfId: string;
 };
 
-const rtcConfiguration: RTCConfiguration = {
-  iceServers: [
+const buildRtcConfiguration = (): RTCConfiguration => {
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+  const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+  const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
+
+  const iceServers: RTCIceServer[] = [
     {
       urls: ["stun:stun.l.google.com:19302"]
     }
-  ]
+  ];
+
+  if (turnUrl) {
+    iceServers.push({
+      urls: [turnUrl],
+      username: turnUsername,
+      credential: turnCredential
+    });
+  }
+
+  return { iceServers };
 };
+
+const rtcConfiguration = buildRtcConfiguration();
 
 export class WebRtcService {
   private readonly peers = new Map<string, RTCPeerConnection>();
@@ -52,6 +68,11 @@ export class WebRtcService {
   private monitorSelf = false;
   private context: RoomContext | null = null;
   private readonly options: ServiceOptions;
+  private readonly pendingPlaybackPeers = new Set<string>();
+  private unlockAudioHandlerAttached = false;
+  private readonly unlockAudioHandler = () => {
+    void this.retryPendingRemoteAudio();
+  };
 
   constructor(options: ServiceOptions) {
     this.options = options;
@@ -250,6 +271,7 @@ export class WebRtcService {
     this.remoteStreams.delete(peerId);
     this.deafenState.delete(peerId);
     this.volumeState.delete(peerId);
+    this.pendingPlaybackPeers.delete(peerId);
   }
 
   reset(): void {
@@ -281,6 +303,7 @@ export class WebRtcService {
 
     this.context = null;
     this.lastSpeakingState = false;
+    this.detachUnlockAudioHandlers();
   }
 
   private ensurePeer(peerId: string): RTCPeerConnection {
@@ -390,15 +413,71 @@ export class WebRtcService {
     if (!audio) {
       audio = new Audio();
       audio.autoplay = true;
+      audio.setAttribute("playsinline", "true");
       this.audioElements.set(peerId, audio);
     }
 
     audio.srcObject = stream;
     audio.muted = this.deafenState.get(peerId) ?? false;
     audio.volume = this.volumeState.get(peerId) ?? 1;
-    void audio.play().catch((err) => {
-      logger.error("EnviroVoice", "Autoplay blocked for remote audio", err);
-    });
+    void this.tryPlayRemoteAudio(peerId, audio);
+  }
+
+  private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {
+    try {
+      await audio.play();
+      this.pendingPlaybackPeers.delete(peerId);
+      if (this.pendingPlaybackPeers.size === 0) {
+        this.detachUnlockAudioHandlers();
+      }
+    } catch (err) {
+      this.pendingPlaybackPeers.add(peerId);
+      this.attachUnlockAudioHandlers();
+      logger.error("EnviroVoice", "Remote audio blocked until user interaction", err);
+    }
+  }
+
+  private attachUnlockAudioHandlers(): void {
+    if (this.unlockAudioHandlerAttached) {
+      return;
+    }
+
+    window.addEventListener("click", this.unlockAudioHandler);
+    window.addEventListener("touchstart", this.unlockAudioHandler);
+    window.addEventListener("keydown", this.unlockAudioHandler);
+    this.unlockAudioHandlerAttached = true;
+  }
+
+  private detachUnlockAudioHandlers(): void {
+    if (!this.unlockAudioHandlerAttached) {
+      return;
+    }
+
+    window.removeEventListener("click", this.unlockAudioHandler);
+    window.removeEventListener("touchstart", this.unlockAudioHandler);
+    window.removeEventListener("keydown", this.unlockAudioHandler);
+    this.unlockAudioHandlerAttached = false;
+  }
+
+  private async retryPendingRemoteAudio(): Promise<void> {
+    for (const peerId of [...this.pendingPlaybackPeers]) {
+      const audio = this.audioElements.get(peerId);
+      if (!audio) {
+        this.pendingPlaybackPeers.delete(peerId);
+        continue;
+      }
+
+      try {
+        await audio.play();
+        this.pendingPlaybackPeers.delete(peerId);
+      } catch {
+        // Keep pending until next user interaction.
+      }
+    }
+
+    if (this.pendingPlaybackPeers.size === 0) {
+      this.detachUnlockAudioHandlers();
+    }
   }
 
   private startLocalSpeakingDetector(stream: MediaStream): void {

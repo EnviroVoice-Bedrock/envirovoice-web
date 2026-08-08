@@ -4,6 +4,7 @@ import type { Room } from "../types/room";
 type Props = {
   room: Room;
   userId: string;
+  voiceMode: "call" | "minecraft";
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
   micSensitivity: number;
@@ -18,6 +19,7 @@ type Props = {
   onSetMicSensitivity: (value: number) => void;
   onSetMonitorSelfVoice: (enabled: boolean) => void;
   onStartVoice: () => Promise<void>;
+  onSetVoiceMode: (mode: "call" | "minecraft") => void;
   onToggleSelfMute: () => void;
   onToggleSelfDeafen: () => void;
   onToggleUserDeafen: (userId: string) => void;
@@ -38,6 +40,7 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
 export const RoomPage = ({
   room,
   userId,
+  voiceMode,
   voiceStatus,
   localMicLevel,
   micSensitivity,
@@ -52,6 +55,7 @@ export const RoomPage = ({
   onSetMicSensitivity,
   onSetMonitorSelfVoice,
   onStartVoice,
+  onSetVoiceMode,
   onToggleSelfMute,
   onToggleSelfDeafen,
   onToggleUserDeafen,
@@ -117,6 +121,29 @@ export const RoomPage = ({
             <h2>Ajustes de voz</h2>
             <span className={`voice-status voice-status-${voiceStatus}`}>{micStatusText}</span>
           </div>
+
+          <div className="voice-mode-toggle" role="group" aria-label="Modo de voz">
+            <button
+              type="button"
+              className={`button-secondary ${voiceMode === "call" ? "mode-active" : ""}`}
+              onClick={() => onSetVoiceMode("call")}
+            >
+              Modo llamada
+            </button>
+            <button
+              type="button"
+              className={`button-secondary ${voiceMode === "minecraft" ? "mode-active" : ""}`}
+              onClick={() => onSetVoiceMode("minecraft")}
+            >
+              Modo Minecraft
+            </button>
+          </div>
+
+          <p className="panel-note">
+            {voiceMode === "call"
+              ? "Modo llamada: voz directa entre usuarios, ideal para hablar fuera de Minecraft."
+              : "Modo Minecraft: solo se oye cuando llegan posiciones del addon de Minecraft."}
+          </p>
 
           <div className="voice-controls-grid">
             <label htmlFor="microphone-select">Microfono</label>
