@@ -3,11 +3,16 @@
   "services": {
     "frontend": {
       "root": ".",
-      "framework": "vite"
+      "framework": "vite",
+      "installCommand": "npm install",
+      "buildCommand": "npm run build:frontend",
+      "outputDirectory": "dist"
     },
     "backend": {
       "root": "backend",
       "framework": "express",
+      "installCommand": "npm install",
+      "buildCommand": "npm run build",
       "entrypoint": "src/server.ts"
     }
   },
