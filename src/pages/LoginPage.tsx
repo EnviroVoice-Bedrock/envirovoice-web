@@ -34,9 +34,9 @@ export const LoginPage = ({ onLogin }: Props) => {
 
   return (
     <section className={shellClassName}>
-      <article className="simple-login-card">
-        <button type="button" className="theme-toggle" onClick={toggleTheme}>
-          {theme === "dark" ? "Modo claro" : "Modo oscuro"}
+      <article className="simple-login-card enviro-login-card">
+        <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Cambiar tema">
+          {theme === "dark" ? "Claro" : "Oscuro"}
         </button>
         <div className="brand-header">
           <img className="brand-logo" src={envirovoiceLogo} alt="EnviroVoice Logo" />
@@ -44,9 +44,7 @@ export const LoginPage = ({ onLogin }: Props) => {
             <img className="brand-mark" src={envirovoiceIcon} alt="EnviroVoice Icon" />
           </div>
         </div>
-        <small className="section-kicker">INICIO DE SESION</small>
-        <h1>Accede al panel</h1>
-        <p>Escribe tu gamertag para continuar.</p>
+        <p className="enviro-subtitle">SPATIAL AUDIO SYSTEM V2.0 FOR MINECRAFT BEDROCK</p>
 
         <form
           onSubmit={(event) => {
@@ -54,23 +52,39 @@ export const LoginPage = ({ onLogin }: Props) => {
             onLogin(name, serverUrl);
           }}
         >
-          <label htmlFor="server-url">URL / CODIGO DE SALA</label>
-          <input
-            id="server-url"
-            value={serverUrl}
-            onChange={(event) => setServerUrl(event.target.value)}
-            placeholder="https://mi-servidor.com/sala-global"
-            autoComplete="off"
-          />
+          <label htmlFor="username">MINECRAFT GAMERTAG / XBOX LIVE USERNAME</label>
+          <div className="field-shell">
+            <span className="field-icon" aria-hidden="true">
+              👤
+            </span>
+            <input
+              id="username"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Steve"
+              autoComplete="off"
+            />
+            <span className="field-chevron" aria-hidden="true">
+              ▾
+            </span>
+          </div>
 
-          <label htmlFor="username">GAMERTAG</label>
-          <input
-            id="username"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="WprousG"
-            autoComplete="off"
-          />
+          <label htmlFor="server-url">VOICE CHANNEL URL</label>
+          <div className="field-shell">
+            <span className="field-icon" aria-hidden="true">
+              🗄️
+            </span>
+            <input
+              id="server-url"
+              value={serverUrl}
+              onChange={(event) => setServerUrl(event.target.value)}
+              placeholder="https://..."
+              autoComplete="off"
+            />
+            <span className="field-chevron" aria-hidden="true">
+              ▾
+            </span>
+          </div>
 
           <div className="simple-user-preview">
             <img src={getAvatarUrl(playerName)} alt={`Avatar de ${playerName}`} />
@@ -80,11 +94,12 @@ export const LoginPage = ({ onLogin }: Props) => {
             </div>
           </div>
 
-          <button type="submit" className="button-primary button-large">
-            Entrar
+          <button type="submit" className="button-primary button-large join-room-button">
+            Join Room →
           </button>
-          <small className="panel-note">Esa URL/codigo define a que sala te conectas.</small>
-          <small className="credits-line">DEVELOPED BY Halo333X, WprousG</small>
+
+          <small className="credits-line">DEVELOPED BY</small>
+          <small className="credits-line credits-names">Halo333X, WprousG</small>
         </form>
       </article>
     </section>
