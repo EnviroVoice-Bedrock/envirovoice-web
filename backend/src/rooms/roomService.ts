@@ -12,6 +12,10 @@ const defaultPosition = {
 export class RoomService {
   private readonly rooms = new Map<string, Room>();
 
+  resetAll(): void {
+    this.rooms.clear();
+  }
+
   listRooms(): Room[] {
     return [...this.rooms.values()];
   }

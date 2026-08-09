@@ -26,6 +26,10 @@ type RoomContext = {
   selfId: string;
 };
 
+type SinkAudioElement = HTMLAudioElement & {
+  setSinkId?: (sinkId: string) => Promise<void>;
+};
+
 const buildRtcConfiguration = (): RTCConfiguration => {
   const turnUrl = import.meta.env.VITE_TURN_URL;
   const turnUsername = import.meta.env.VITE_TURN_USERNAME;
@@ -69,6 +73,7 @@ export class WebRtcService {
   private localSpeakingTimer: number | undefined;
   private lastSpeakingState = false;
   private selectedDeviceId: string | null = null;
+  private selectedOutputDeviceId: string | null = null;
   private speakingThreshold = 0.04;
   private monitorSelf = false;
   private noiseSuppressionEnabled = true;
@@ -90,6 +95,13 @@ export class WebRtcService {
 
   configureInput(deviceId: string | null): void {
     this.selectedDeviceId = deviceId;
+  }
+
+  setOutputDeviceId(deviceId: string | null): void {
+    this.selectedOutputDeviceId = deviceId;
+    for (const [peerId, audio] of this.audioElements.entries()) {
+      void this.applyOutputDevice(peerId, audio);
+    }
   }
 
   setSpeakingThreshold(threshold: number): void {
@@ -460,7 +472,23 @@ export class WebRtcService {
     audio.srcObject = stream;
     audio.muted = this.deafenState.get(peerId) ?? false;
     audio.volume = this.volumeState.get(peerId) ?? 1;
+    void this.applyOutputDevice(peerId, audio);
     void this.tryPlayRemoteAudio(peerId, audio);
+  }
+
+  private async applyOutputDevice(peerId: string, audio: HTMLAudioElement): Promise<void> {
+    const sinkAudio = audio as SinkAudioElement;
+    if (!sinkAudio.setSinkId) {
+      return;
+    }
+
+    const sinkId = this.selectedOutputDeviceId ?? "";
+
+    try {
+      await sinkAudio.setSinkId(sinkId);
+    } catch (err) {
+      logger.error("EnviroVoice", "Failed to apply output device", { peerId, sinkId, err });
+    }
   }
 
   private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {

@@ -47,6 +47,8 @@ export const App = () => {
     monitorSelfVoice,
     availableMicrophones,
     selectedMicrophoneId,
+    availableOutputDevices,
+    selectedOutputDeviceId,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
@@ -59,6 +61,7 @@ export const App = () => {
     startVoice,
     refreshMicrophones,
     setMicrophone,
+    setOutputDevice,
     setMicSensitivity,
     setMonitorSelfVoice,
     setPeerVolume,
@@ -66,10 +69,17 @@ export const App = () => {
     setSelfDeafened,
     toggleUserDeafen,
     logout,
+    resetForTesting,
     clearError
   } = useAppStore();
 
-  const handleLogin = (name: string, serverUrl: string): void => {
+  const handleLogin = async (name: string, serverUrl: string): Promise<void> => {
+    const isResetCommand = name.trim().toLowerCase() === "!reset" || serverUrl.trim().toLowerCase() === "!reset";
+    if (isResetCommand) {
+      await resetForTesting();
+      return;
+    }
+
     setTargetRoomName(deriveRoomFromServerUrl(serverUrl));
     setSession(name);
   };
@@ -115,12 +125,15 @@ export const App = () => {
           monitorSelfVoice={monitorSelfVoice}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
+          availableOutputDevices={availableOutputDevices}
+          selectedOutputDeviceId={selectedOutputDeviceId}
           selfMuted={isSelfMuted}
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
           peerVolumes={peerVolumes}
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
+          onSetOutputDevice={setOutputDevice}
           onSetMicSensitivity={setMicSensitivity}
           onSetMonitorSelfVoice={setMonitorSelfVoice}
           onSetPeerVolume={setPeerVolume}

@@ -25,6 +25,7 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
 
 export const apiClient = {
   health: () => request<{ service: string; status: string }>("/api/health"),
+  resetTesting: () => request<{ reset: boolean }>("/api/testing/reset", { method: "POST" }),
   getRooms: () => request<Room[]>("/api/rooms"),
   createRoom: (name: string, userId: string, userName: string) =>
     request<Room>("/api/rooms", {

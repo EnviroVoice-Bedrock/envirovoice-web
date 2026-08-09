@@ -68,3 +68,10 @@ roomsRouter.post("/rooms/:roomId/leave", (req, res) => {
 
   res.json({ success: true, data: room });
 });
+
+roomsRouter.post("/testing/reset", (_req, res) => {
+  roomService.resetAll();
+  console.info("[Testing] In-memory room state reset");
+
+  res.json({ success: true, data: { reset: true } });
+});

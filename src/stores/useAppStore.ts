@@ -18,6 +18,11 @@ type MicrophoneOption = {
   label: string;
 };
 
+type OutputDeviceOption = {
+  id: string;
+  label: string;
+};
+
 type AppState = {
   session: UserSession | null;
   rooms: Room[];
@@ -33,6 +38,8 @@ type AppState = {
   monitorSelfVoice: boolean;
   availableMicrophones: MicrophoneOption[];
   selectedMicrophoneId: string | null;
+  availableOutputDevices: OutputDeviceOption[];
+  selectedOutputDeviceId: string | null;
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
   errorMessage: string | null;
@@ -47,6 +54,7 @@ type AppState = {
   startVoice: () => Promise<void>;
   refreshMicrophones: () => Promise<void>;
   setMicrophone: (deviceId: string | null) => Promise<void>;
+  setOutputDevice: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
   setMonitorSelfVoice: (enabled: boolean) => void;
   setPeerVolume: (userId: string, volume: number) => void;
@@ -55,6 +63,7 @@ type AppState = {
   setSelfDeafened: (deafened: boolean) => void;
   toggleUserDeafen: (userId: string) => void;
   logout: () => Promise<void>;
+  resetForTesting: () => Promise<void>;
   clearError: () => void;
 };
 
@@ -358,6 +367,8 @@ export const useAppStore = create<AppState>((set, get) => {
     monitorSelfVoice: false,
     availableMicrophones: [],
     selectedMicrophoneId: null,
+    availableOutputDevices: [],
+    selectedOutputDeviceId: null,
     deafenedUsers: {},
     peerVolumes: {},
     errorMessage: null,
@@ -401,7 +412,12 @@ export const useAppStore = create<AppState>((set, get) => {
 
     refreshMicrophones: async () => {
       if (!navigator.mediaDevices?.enumerateDevices) {
-        set({ availableMicrophones: [], selectedMicrophoneId: null });
+        set({
+          availableMicrophones: [],
+          selectedMicrophoneId: null,
+          availableOutputDevices: [],
+          selectedOutputDeviceId: null
+        });
         return;
       }
 
@@ -414,6 +430,13 @@ export const useAppStore = create<AppState>((set, get) => {
             label: device.label || `Microfono ${index + 1}`
           }));
 
+        const outputs = devices
+          .filter((device) => device.kind === "audiooutput")
+          .map((device, index) => ({
+            id: device.deviceId,
+            label: device.label || `Salida ${index + 1}`
+          }));
+
         set((state) => {
           const selectedExists = state.selectedMicrophoneId
             ? microphones.some((mic) => mic.id === state.selectedMicrophoneId)
@@ -421,11 +444,19 @@ export const useAppStore = create<AppState>((set, get) => {
 
           const nextSelectedId = selectedExists ? state.selectedMicrophoneId : (microphones[0]?.id ?? null);
 
+          const selectedOutputExists = state.selectedOutputDeviceId
+            ? outputs.some((output) => output.id === state.selectedOutputDeviceId)
+            : false;
+          const nextOutputId = selectedOutputExists ? state.selectedOutputDeviceId : (outputs[0]?.id ?? null);
+
           webrtc.configureInput(nextSelectedId);
+          webrtc.setOutputDeviceId(nextOutputId);
 
           return {
             availableMicrophones: microphones,
-            selectedMicrophoneId: nextSelectedId
+            selectedMicrophoneId: nextSelectedId,
+            availableOutputDevices: outputs,
+            selectedOutputDeviceId: nextOutputId
           };
         });
       } catch (err) {
@@ -448,6 +479,12 @@ export const useAppStore = create<AppState>((set, get) => {
         logger.error("EnviroVoice", "Failed to switch microphone", err);
         set({ errorMessage: "No se pudo cambiar el microfono" });
       }
+    },
+
+    setOutputDevice: async (deviceId) => {
+      const nextId = deviceId || null;
+      webrtc.setOutputDeviceId(nextId);
+      set({ selectedOutputDeviceId: nextId });
     },
 
     setMicSensitivity: (value) => {
@@ -624,6 +661,8 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfMuted: false,
         isSelfDeafened: false,
         localMicLevel: 0,
+        availableOutputDevices: [],
+        selectedOutputDeviceId: null,
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null
@@ -691,6 +730,43 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfMuted: false,
         isSelfDeafened: false,
         localMicLevel: 0,
+        availableOutputDevices: [],
+        selectedOutputDeviceId: null,
+        deafenedUsers: {},
+        peerVolumes: {},
+        errorMessage: null
+      });
+
+      clearAllPeerRecoveryTimers();
+
+      webrtc.reset();
+    },
+
+    resetForTesting: async () => {
+      const { signaling } = get();
+
+      try {
+        await apiClient.resetTesting();
+      } catch (err) {
+        logger.error("Rooms", "Failed to reset backend testing state", err);
+      }
+
+      signaling.disconnect();
+
+      set({
+        session: null,
+        rooms: [],
+        currentRoom: null,
+        connectionStatus: "disconnected",
+        voiceStatus: "idle",
+        peerStates: {},
+        isSelfMuted: false,
+        isSelfDeafened: false,
+        localMicLevel: 0,
+        monitorSelfVoice: false,
+        selectedMicrophoneId: null,
+        availableOutputDevices: [],
+        selectedOutputDeviceId: null,
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null

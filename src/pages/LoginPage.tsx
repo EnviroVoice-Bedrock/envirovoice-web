@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import envirovoiceLogo from "../../assets/Envirovoice Logo.png";
 
 type Props = {
-  onLogin: (name: string, serverUrl: string) => void;
+  onLogin: (name: string, serverUrl: string) => Promise<void> | void;
 };
 
 type UrlPayload = {
@@ -195,8 +195,16 @@ export const LoginPage = ({ onLogin }: Props) => {
             setUrlMessage(null);
 
             try {
+              const isResetCommand = name.trim().toLowerCase() === "!reset" || serverUrl.trim().toLowerCase() === "!reset";
+              if (isResetCommand) {
+                await onLogin("!reset", "!reset");
+                setName("");
+                setUrlMessage("Reset aplicado: rol/sesion y salas de prueba reiniciadas.");
+                return;
+              }
+
               const resolvedServerUrl = await fetchResolvedUrl(serverUrl);
-              onLogin(name, resolvedServerUrl);
+              await onLogin(name, resolvedServerUrl);
             } catch (err) {
               const message = err instanceof Error ? err.message : "No se pudo resolver la URL";
               setUrlMessage(message);
