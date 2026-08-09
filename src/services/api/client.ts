@@ -7,13 +7,24 @@ type ApiResponse<T> = {
   message?: string;
 };
 
+const REQUEST_TIMEOUT_MS = 8000;
+
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`${env.apiUrl}${path}`, {
-    headers: {
-      "Content-Type": "application/json"
-    },
-    ...init
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${env.apiUrl}${path}`, {
+      headers: {
+        "Content-Type": "application/json"
+      },
+      signal: controller.signal,
+      ...init
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     throw new Error(`API request failed (${response.status})`);

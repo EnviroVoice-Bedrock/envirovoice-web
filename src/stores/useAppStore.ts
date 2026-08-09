@@ -381,6 +381,8 @@ export const useAppStore = create<AppState>((set, get) => {
         return;
       }
 
+      signaling.connect();
+
       set({
         session: {
           id: createId(),
@@ -641,19 +643,11 @@ export const useAppStore = create<AppState>((set, get) => {
         return;
       }
 
-      try {
-        await apiClient.leaveRoom(currentRoom.id, session.id);
-      } catch (err) {
-        logger.error("Rooms", "Failed to leave room through API", err);
-      }
+      const roomId = currentRoom.id;
+      const userName = session.name;
+      const userId = session.id;
 
-      signaling.send({
-        type: "leave-room",
-        roomId: currentRoom.id,
-        from: session.id,
-        payload: { userName: session.name }
-      });
-
+      // Clear local state first so UI never remains stuck if network is slow.
       set({
         currentRoom: null,
         voiceStatus: "idle",
@@ -671,6 +665,19 @@ export const useAppStore = create<AppState>((set, get) => {
       clearAllPeerRecoveryTimers();
 
       webrtc.reset();
+
+      try {
+        await apiClient.leaveRoom(roomId, userId);
+      } catch (err) {
+        logger.error("Rooms", "Failed to leave room through API", err);
+      }
+
+      signaling.send({
+        type: "leave-room",
+        roomId,
+        from: userId,
+        payload: { userName }
+      });
 
       await get().fetchRooms();
     },
