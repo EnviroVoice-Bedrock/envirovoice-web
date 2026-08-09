@@ -380,6 +380,10 @@ button:disabled {
 }
 
 .room-settings-popover {
+  position: absolute;
+  top: 92px;
+  right: 22px;
+  z-index: 5;
   width: min(360px, calc(100% - 44px));
   border: 1px solid rgba(98, 117, 143, 0.5);
   border-radius: 12px;
@@ -446,9 +450,21 @@ button:disabled {
 .voice-settings-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.voice-settings-head-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.room-settings-close {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
 }
 
 .voice-settings-head h2 {
@@ -609,8 +625,23 @@ input[type="range"] {
 
 .avatar-frame-speaking {
   border-color: #51b7ff;
-  box-shadow: 0 0 0 3px rgba(81, 183, 255, 0.1), 0 0 18px rgba(81, 183, 255, 0.48);
+  box-shadow: 0 0 0 3px rgba(81, 183, 255, 0.14), 0 0 18px rgba(81, 183, 255, 0.52);
   animation: speakPulse 900ms ease-in-out infinite;
+}
+
+.avatar-frame-speaking::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 20px;
+  background: radial-gradient(circle, rgba(81, 183, 255, 0.45) 0%, rgba(81, 183, 255, 0.22) 34%, rgba(81, 183, 255, 0) 70%);
+  filter: blur(2px);
+  z-index: -1;
+  animation: speakGlow 900ms ease-in-out infinite;
+}
+
+.avatar-frame {
+  position: relative;
 }
 
 .avatar {
@@ -771,5 +802,18 @@ input[type="range"] {
   50% {
     transform: scale(1.03);
     box-shadow: 0 0 0 5px rgba(81, 183, 255, 0.16), 0 0 24px rgba(81, 183, 255, 0.72);
+  }
+}
+
+@keyframes speakGlow {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
   }
 }

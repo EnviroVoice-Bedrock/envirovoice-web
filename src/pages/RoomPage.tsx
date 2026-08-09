@@ -100,7 +100,7 @@ export const RoomPage = ({
         <img className="room-topbar-logo" src={envirovoiceLogo} alt="EnviroVoice" />
         <div className="room-topbar-actions">
           <button type="button" className="button-secondary room-settings-button" onClick={() => setShowVoiceSettings((value) => !value)}>
-            Ajustes de voz
+            {showVoiceSettings ? "Ocultar ajustes" : "Ajustes de voz"}
           </button>
           <button type="button" className="room-disconnect" onClick={() => void onLeave()}>
             Disconnect
@@ -127,7 +127,12 @@ export const RoomPage = ({
         <aside className="room-settings-popover" aria-label="Ajustes de voz">
           <div className="voice-settings-head">
             <h2>Ajustes de voz</h2>
-            <span className={`voice-status voice-status-${voiceStatus}`}>{micStatusText}</span>
+            <div className="voice-settings-head-actions">
+              <span className={`voice-status voice-status-${voiceStatus}`}>{micStatusText}</span>
+              <button type="button" className="button-secondary room-settings-close" onClick={() => setShowVoiceSettings(false)}>
+                Cerrar
+              </button>
+            </div>
           </div>
 
           <div className="voice-mode-toggle" role="group" aria-label="Modo de voz">
