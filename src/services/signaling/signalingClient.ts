@@ -63,6 +63,10 @@ export class SignalingClient {
     this.updateStatus("disconnected");
   }
 
+  isConnected(): boolean {
+    return Boolean(this.socket && this.socket.readyState === WebSocket.OPEN);
+  }
+
   send(message: SignalingMessage): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       logger.error("Signaling", "Cannot send message while socket is disconnected");

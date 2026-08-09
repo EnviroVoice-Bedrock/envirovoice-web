@@ -331,6 +331,8 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(8, 10, 14, 0.95), rgba(4, 6, 9, 0.95));
+  display: flex;
+  flex-direction: column;
   position: relative;
   overflow: hidden;
 }
@@ -376,7 +378,7 @@ button:disabled {
 
 .room-stage {
   padding: 22px;
-  min-height: calc(100vh - 280px);
+  flex: 1 1 auto;
 }
 
 .room-settings-popover {
@@ -402,6 +404,7 @@ button:disabled {
   gap: 18px;
   padding: 14px 22px;
   background: rgba(12, 14, 18, 0.95);
+  margin-top: auto;
 }
 
 .dock-block {
@@ -610,6 +613,7 @@ input[type="range"] {
 .participant-item-speaking {
   border-color: rgba(94, 216, 255, 0.72);
   box-shadow: 0 0 0 1px rgba(94, 216, 255, 0.14), 0 0 18px rgba(94, 216, 255, 0.16);
+  background: radial-gradient(circle at 24% 50%, rgba(67, 173, 255, 0.16) 0%, rgba(26, 29, 36, 0.62) 40%);
 }
 
 .avatar-frame {
@@ -752,8 +756,6 @@ input[type="range"] {
 
   .room-stage {
     padding: 12px;
-    min-height: 320px;
-    margin-bottom: 220px;
   }
 
   .participant-list {

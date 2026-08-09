@@ -155,6 +155,11 @@ export const useAppStore = create<AppState>((set, get) => {
       signaling.send(message);
     },
     onPeerStateChange: (userId, state) => {
+      const { session, currentRoom } = get();
+      if (!session || !currentRoom) {
+        return;
+      }
+
       set((store) => ({
         peerStates: {
           ...store.peerStates,
@@ -620,7 +625,8 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfDeafened: false,
         localMicLevel: 0,
         deafenedUsers: {},
-        peerVolumes: {}
+        peerVolumes: {},
+        errorMessage: null
       });
 
       clearAllPeerRecoveryTimers();
@@ -673,6 +679,8 @@ export const useAppStore = create<AppState>((set, get) => {
       if (currentRoom) {
         await get().leaveRoom();
       }
+
+      signaling.disconnect();
 
       set({
         session: null,
