@@ -12,6 +12,21 @@ const defaultPosition = {
 export class RoomService {
   private readonly rooms = new Map<string, Room>();
 
+  private static normalizeRoomName(name: string): string {
+    return name.trim().toLowerCase();
+  }
+
+  private findRoomByName(name: string): Room | undefined {
+    const normalized = RoomService.normalizeRoomName(name);
+    for (const room of this.rooms.values()) {
+      if (RoomService.normalizeRoomName(room.name) === normalized) {
+        return room;
+      }
+    }
+
+    return undefined;
+  }
+
   resetAll(): void {
     this.rooms.clear();
   }
@@ -25,6 +40,28 @@ export class RoomService {
   }
 
   createRoom(name: string, ownerId: string, ownerName: string): Room {
+    const existing = this.findRoomByName(name);
+    if (existing) {
+      const alreadyJoined = existing.users.some((user) => user.id === ownerId);
+      if (alreadyJoined) {
+        return existing;
+      }
+
+      if (existing.users.length >= existing.maxUsers) {
+        throw new Error("Room full");
+      }
+
+      existing.users.push({
+        id: ownerId,
+        name: ownerName,
+        muted: false,
+        speaking: false,
+        position: defaultPosition
+      });
+
+      return existing;
+    }
+
     const roomId = uuidv4();
     const owner: RoomUser = {
       id: ownerId,
