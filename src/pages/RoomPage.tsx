@@ -8,6 +8,7 @@ import { useState } from "react";
 type Props = {
   room: Room;
   userId: string;
+  connectionStatus: "connecting" | "connected" | "disconnected" | "reconnecting";
   voiceMode: "call" | "minecraft";
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
@@ -22,6 +23,7 @@ type Props = {
   selfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
+  peerStates: Record<string, RTCPeerConnectionState>;
   onRefreshMicrophones: () => Promise<void>;
   onSetMicrophone: (deviceId: string | null) => Promise<void>;
   onSetOutputDevice: (deviceId: string | null) => Promise<void>;
@@ -47,6 +49,7 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
 export const RoomPage = ({
   room,
   userId,
+  connectionStatus,
   voiceMode,
   voiceStatus,
   localMicLevel,
@@ -61,6 +64,7 @@ export const RoomPage = ({
   selfDeafened,
   deafenedUsers,
   peerVolumes,
+  peerStates,
   onRefreshMicrophones,
   onSetMicrophone,
   onSetOutputDevice,
@@ -77,7 +81,8 @@ export const RoomPage = ({
 }: Props) => {
   const [showVoiceSettings, setShowVoiceSettings] = useState(true);
   const selfUser = room.users.find((user) => user.id === userId);
-  const nearbyUsers = room.users
+  const uniqueUsers = Array.from(new Map(room.users.map((user) => [user.id, user])).values());
+  const nearbyUsers = uniqueUsers
     .filter((user) => user.id !== userId)
     .sort((a, b) => {
       if (!selfUser) {
@@ -89,7 +94,9 @@ export const RoomPage = ({
       return distanceA - distanceB;
     });
 
-  const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : room.users;
+  const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : uniqueUsers;
+  const connectedPeerCount = Object.values(peerStates).filter((state) => state === "connected").length;
+  const activeSpeakers = visibleUsers.filter((user) => user.speaking && !user.muted).length;
 
   const micStatusText =
     voiceStatus === "ready"
@@ -119,6 +126,37 @@ export const RoomPage = ({
       </header>
 
       <main className="room-stage">
+        <section className="mini-status-panel" aria-label="Panel de diagnostico">
+          <div className="mini-status-row">
+            <span className="mini-status-label">WS</span>
+            <strong className={`mini-status-value mini-status-${connectionStatus}`}>{connectionStatus}</strong>
+          </div>
+          <div className="mini-status-row">
+            <span className="mini-status-label">Voz</span>
+            <strong className={`mini-status-value mini-status-${voiceStatus}`}>{voiceStatus}</strong>
+          </div>
+          <div className="mini-status-row">
+            <span className="mini-status-label">Modo</span>
+            <strong className="mini-status-value">{voiceMode}</strong>
+          </div>
+          <div className="mini-status-row">
+            <span className="mini-status-label">Usuarios</span>
+            <strong className="mini-status-value">{visibleUsers.length}</strong>
+          </div>
+          <div className="mini-status-row">
+            <span className="mini-status-label">Peers</span>
+            <strong className="mini-status-value">{connectedPeerCount}</strong>
+          </div>
+          <div className="mini-status-row">
+            <span className="mini-status-label">Hablando</span>
+            <strong className="mini-status-value">{activeSpeakers}</strong>
+          </div>
+          <div className="mini-status-row">
+            <span className="mini-status-label">Micro</span>
+            <strong className="mini-status-value">{Math.round(localMicLevel * 100)}%</strong>
+          </div>
+        </section>
+
         {visibleUsers.length ? (
           <ParticipantList
             users={visibleUsers}

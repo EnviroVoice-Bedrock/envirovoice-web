@@ -41,6 +41,7 @@ export const App = () => {
   const {
     session,
     currentRoom,
+    connectionStatus,
     voiceMode,
     voiceStatus,
     localMicLevel,
@@ -55,6 +56,7 @@ export const App = () => {
     isSelfDeafened,
     deafenedUsers,
     peerVolumes,
+    peerStates,
     errorMessage,
     setSession,
     setVoiceMode,
@@ -158,6 +160,7 @@ export const App = () => {
         <RoomPage
           room={currentRoom}
           userId={session.id}
+          connectionStatus={connectionStatus}
           voiceMode={voiceMode}
           voiceStatus={voiceStatus}
           localMicLevel={localMicLevel}
@@ -172,6 +175,7 @@ export const App = () => {
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
           peerVolumes={peerVolumes}
+          peerStates={peerStates}
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
           onSetOutputDevice={setOutputDevice}

@@ -506,6 +506,55 @@ button:disabled {
   gap: 10px;
 }
 
+.mini-status-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(79, 126, 168, 0.55);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(19, 30, 43, 0.94), rgba(14, 22, 32, 0.94));
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+}
+
+.mini-status-row {
+  display: grid;
+  gap: 4px;
+}
+
+.mini-status-label {
+  color: #84a5be;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mini-status-value {
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.mini-status-connected,
+.mini-status-ready {
+  color: #a6f0d4;
+}
+
+.mini-status-reconnecting,
+.mini-status-requesting,
+.mini-status-connecting {
+  color: #d0e8fa;
+}
+
+.mini-status-disconnected,
+.mini-status-denied,
+.mini-status-unavailable,
+.mini-status-failed {
+  color: #ffd2d2;
+}
+
 .voice-mode-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
