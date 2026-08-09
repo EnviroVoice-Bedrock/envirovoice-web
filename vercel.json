@@ -7,22 +7,9 @@
       "installCommand": "npm install",
       "buildCommand": "npm run build:frontend",
       "outputDirectory": "dist"
-    },
-    "backend": {
-      "root": "backend",
-      "framework": "express",
-      "installCommand": "npm install",
-      "buildCommand": "npm run build",
-      "entrypoint": "src/server.ts"
     }
   },
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": {
-        "service": "backend"
-      }
-    },
     {
       "source": "/(.*)",
       "destination": {
