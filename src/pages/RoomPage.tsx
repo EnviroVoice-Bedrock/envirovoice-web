@@ -19,6 +19,8 @@ type Props = {
   selectedMicrophoneId: string | null;
   availableOutputDevices: Array<{ id: string; label: string }>;
   selectedOutputDeviceId: string | null;
+  remoteTracksReceived: Record<string, boolean>;
+  remotePlaybackBlocked: Record<string, boolean>;
   selfMuted: boolean;
   selfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
@@ -60,6 +62,8 @@ export const RoomPage = ({
   selectedMicrophoneId,
   availableOutputDevices,
   selectedOutputDeviceId,
+  remoteTracksReceived,
+  remotePlaybackBlocked,
   selfMuted,
   selfDeafened,
   deafenedUsers,
@@ -96,7 +100,9 @@ export const RoomPage = ({
 
   const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : uniqueUsers;
   const connectedPeerCount = Object.values(peerStates).filter((state) => state === "connected").length;
-  const activeSpeakers = visibleUsers.filter((user) => user.speaking && !user.muted).length;
+  const receivedTrackCount = Object.values(remoteTracksReceived).filter(Boolean).length;
+  const blockedPlaybackCount = Object.values(remotePlaybackBlocked).filter(Boolean).length;
+  const liveVoiceCount = visibleUsers.filter((user) => user.speaking && !user.muted).length;
 
   const micStatusText =
     voiceStatus === "ready"
@@ -127,33 +133,58 @@ export const RoomPage = ({
 
       <main className="room-stage">
         <section className="mini-status-panel" aria-label="Panel de diagnostico">
-          <div className="mini-status-row">
-            <span className="mini-status-label">WS</span>
-            <strong className={`mini-status-value mini-status-${connectionStatus}`}>{connectionStatus}</strong>
+          <div className="mini-status-block mini-status-block-main">
+            <span className="mini-status-label">Conexión</span>
+            <strong className={`mini-status-pill mini-status-${connectionStatus}`}>{connectionStatus}</strong>
+            <small className="mini-status-helper">WebSocket activo y sincronizando sala</small>
           </div>
-          <div className="mini-status-row">
+
+          <div className="mini-status-block">
             <span className="mini-status-label">Voz</span>
-            <strong className={`mini-status-value mini-status-${voiceStatus}`}>{voiceStatus}</strong>
+            <strong className={`mini-status-pill mini-status-${voiceStatus}`}>{voiceStatus}</strong>
+            <small className="mini-status-helper">Captura local y negociación WebRTC</small>
           </div>
-          <div className="mini-status-row">
-            <span className="mini-status-label">Modo</span>
-            <strong className="mini-status-value">{voiceMode}</strong>
+
+          <div className="mini-status-block">
+            <span className="mini-status-label">Track remoto</span>
+            <strong className="mini-status-pill mini-status-ok">{receivedTrackCount}</strong>
+            <small className="mini-status-helper">Señal de audio recibida</small>
           </div>
-          <div className="mini-status-row">
-            <span className="mini-status-label">Usuarios</span>
-            <strong className="mini-status-value">{visibleUsers.length}</strong>
+
+          <div className="mini-status-block">
+            <span className="mini-status-label">Playback</span>
+            <strong className={`mini-status-pill ${blockedPlaybackCount ? "mini-status-bad" : "mini-status-ok"}`}>{blockedPlaybackCount ? `${blockedPlaybackCount} bloqueado` : "listo"}</strong>
+            <small className="mini-status-helper">Si está bloqueado, haz click en la ventana</small>
           </div>
-          <div className="mini-status-row">
-            <span className="mini-status-label">Peers</span>
-            <strong className="mini-status-value">{connectedPeerCount}</strong>
-          </div>
-          <div className="mini-status-row">
+
+          <div className="mini-status-block">
             <span className="mini-status-label">Hablando</span>
-            <strong className="mini-status-value">{activeSpeakers}</strong>
+            <strong className="mini-status-pill mini-status-ok">{liveVoiceCount}</strong>
+            <small className="mini-status-helper">Usuarios con voz activa</small>
           </div>
-          <div className="mini-status-row">
+
+          <div className="mini-status-block">
+            <span className="mini-status-label">Modo</span>
+            <strong className="mini-status-pill mini-status-info">{voiceMode}</strong>
+            <small className="mini-status-helper">Modo de mezcla activo</small>
+          </div>
+
+          <div className="mini-status-block">
+            <span className="mini-status-label">Usuarios</span>
+            <strong className="mini-status-pill mini-status-info">{visibleUsers.length}</strong>
+            <small className="mini-status-helper">Participantes en pantalla</small>
+          </div>
+
+          <div className="mini-status-block">
+            <span className="mini-status-label">Peers</span>
+            <strong className="mini-status-pill mini-status-info">{connectedPeerCount}</strong>
+            <small className="mini-status-helper">Conexiones WebRTC vivas</small>
+          </div>
+
+          <div className="mini-status-block">
             <span className="mini-status-label">Micro</span>
-            <strong className="mini-status-value">{Math.round(localMicLevel * 100)}%</strong>
+            <strong className="mini-status-pill mini-status-info">{Math.round(localMicLevel * 100)}%</strong>
+            <small className="mini-status-helper">Nivel de entrada actual</small>
           </div>
         </section>
 

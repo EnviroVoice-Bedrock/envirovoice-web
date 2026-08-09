@@ -41,6 +41,8 @@ type AppState = {
   selectedMicrophoneId: string | null;
   availableOutputDevices: OutputDeviceOption[];
   selectedOutputDeviceId: string | null;
+  remoteTracksReceived: Record<string, boolean>;
+  remotePlaybackBlocked: Record<string, boolean>;
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
   errorMessage: string | null;
@@ -92,6 +94,11 @@ const upsertRoom = (rooms: Room[], room: Room): Room[] => {
   cloned[index] = room;
   return cloned;
 };
+
+const dedupeRoomUsers = (room: Room): Room => ({
+  ...room,
+  users: Array.from(new Map(room.users.map((user) => [user.id, user])).values())
+});
 
 const hasMinecraftPosition = (user: RoomUser): boolean => {
   const p = user.position;
@@ -164,6 +171,22 @@ export const useAppStore = create<AppState>((set, get) => {
   const webrtc = new WebRtcService({
     sendSignal: (message) => {
       signaling.send(message);
+    },
+    onRemoteTrack: (userId) => {
+      set((state) => ({
+        remoteTracksReceived: {
+          ...state.remoteTracksReceived,
+          [userId]: true
+        }
+      }));
+    },
+    onRemotePlaybackState: (userId, stateName) => {
+      set((state) => ({
+        remotePlaybackBlocked: {
+          ...state.remotePlaybackBlocked,
+          [userId]: stateName === "blocked"
+        }
+      }));
     },
     onPeerStateChange: (userId, state) => {
       const { session, currentRoom } = get();
@@ -275,7 +298,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
   signaling.onMessage((message) => {
     if (message.type === "room-state" && message.payload) {
-      const room = message.payload as Room;
+      const room = dedupeRoomUsers(message.payload as Room);
       set((state) => ({
         currentRoom: state.currentRoom?.id === room.id ? room : state.currentRoom,
         rooms: upsertRoom(state.rooms, room)
@@ -292,7 +315,7 @@ export const useAppStore = create<AppState>((set, get) => {
     }
 
     if (message.type === "rooms-state" && message.payload) {
-      const rooms = message.payload as Room[];
+      const rooms = (message.payload as Room[]).map(dedupeRoomUsers);
       set((state) => ({
         rooms,
         currentRoom: state.currentRoom
@@ -372,6 +395,8 @@ export const useAppStore = create<AppState>((set, get) => {
     selectedMicrophoneId: null,
     availableOutputDevices: [],
     selectedOutputDeviceId: null,
+    remoteTracksReceived: {},
+    remotePlaybackBlocked: {},
     deafenedUsers: {},
     peerVolumes: {},
     errorMessage: null,
@@ -678,6 +703,8 @@ export const useAppStore = create<AppState>((set, get) => {
         advancedNoiseSuppression: true,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,
+        remoteTracksReceived: {},
+        remotePlaybackBlocked: {},
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null
@@ -761,6 +788,8 @@ export const useAppStore = create<AppState>((set, get) => {
         advancedNoiseSuppression: true,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,
+        remoteTracksReceived: {},
+        remotePlaybackBlocked: {},
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null
@@ -797,6 +826,8 @@ export const useAppStore = create<AppState>((set, get) => {
         selectedMicrophoneId: null,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,
+        remoteTracksReceived: {},
+        remotePlaybackBlocked: {},
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null

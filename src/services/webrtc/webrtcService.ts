@@ -12,10 +12,12 @@ type RemoteTrackCallback = (userId: string, stream: MediaStream) => void;
 type PeerStateCallback = (userId: string, state: RTCPeerConnectionState) => void;
 type LocalSpeakingCallback = (speaking: boolean) => void;
 type LocalLevelCallback = (level: number) => void;
+type RemotePlaybackStateCallback = (userId: string, state: "playing" | "blocked") => void;
 
 type ServiceOptions = {
   sendSignal: SignalSender;
   onRemoteTrack?: RemoteTrackCallback;
+  onRemotePlaybackState?: RemotePlaybackStateCallback;
   onPeerStateChange?: PeerStateCallback;
   onLocalSpeaking?: LocalSpeakingCallback;
   onLocalLevel?: LocalLevelCallback;
@@ -88,6 +90,7 @@ export class WebRtcService {
   private context: RoomContext | null = null;
   private readonly options: ServiceOptions;
   private readonly pendingPlaybackPeers = new Set<string>();
+  private pendingPlaybackRetryTimer: number | undefined;
   private unlockAudioHandlerAttached = false;
   private readonly unlockAudioHandler = () => {
     void this.ensureAudioContextRunning();
@@ -357,6 +360,10 @@ export class WebRtcService {
     this.deafenState.delete(peerId);
     this.volumeState.delete(peerId);
     this.pendingPlaybackPeers.delete(peerId);
+
+    if (this.pendingPlaybackPeers.size === 0) {
+      this.stopPendingPlaybackRetryLoop();
+    }
   }
 
   reset(): void {
@@ -417,6 +424,7 @@ export class WebRtcService {
     this.context = null;
     this.lastSpeakingState = false;
     this.detachUnlockAudioHandlers();
+    this.stopPendingPlaybackRetryLoop();
   }
 
   private ensurePeer(peerId: string): RTCPeerConnection {
@@ -456,8 +464,8 @@ export class WebRtcService {
 
       this.remoteStreams.set(peerId, stream);
       this.bindAudioElement(peerId, stream);
-      logger.log("EnviroVoice", "Remote track received", { peerId });
       this.options.onRemoteTrack?.(peerId, stream);
+      logger.log("EnviroVoice", "Remote track received", { peerId });
     };
 
     peer.onconnectionstatechange = () => {
@@ -533,6 +541,7 @@ export class WebRtcService {
     audio.srcObject = this.attachRemoteGainPipeline(peerId, stream);
     audio.muted = this.deafenState.get(peerId) ?? false;
     audio.volume = 1;
+    audio.load();
     void this.applyOutputDevice(peerId, audio);
     void this.tryPlayRemoteAudio(peerId, audio);
   }
@@ -601,13 +610,17 @@ export class WebRtcService {
     try {
       await this.ensureRemoteAudioContextRunning();
       await audio.play();
+      this.options.onRemotePlaybackState?.(peerId, "playing");
       this.pendingPlaybackPeers.delete(peerId);
       if (this.pendingPlaybackPeers.size === 0) {
         this.detachUnlockAudioHandlers();
+        this.stopPendingPlaybackRetryLoop();
       }
     } catch (err) {
       this.pendingPlaybackPeers.add(peerId);
       this.attachUnlockAudioHandlers();
+      this.startPendingPlaybackRetryLoop();
+      this.options.onRemotePlaybackState?.(peerId, "blocked");
       logger.error("EnviroVoice", "Remote audio blocked until user interaction", err);
     }
   }
@@ -652,7 +665,27 @@ export class WebRtcService {
 
     if (this.pendingPlaybackPeers.size === 0) {
       this.detachUnlockAudioHandlers();
+      this.stopPendingPlaybackRetryLoop();
     }
+  }
+
+  private startPendingPlaybackRetryLoop(): void {
+    if (this.pendingPlaybackRetryTimer) {
+      return;
+    }
+
+    this.pendingPlaybackRetryTimer = window.setInterval(() => {
+      void this.retryPendingRemoteAudio();
+    }, 1200);
+  }
+
+  private stopPendingPlaybackRetryLoop(): void {
+    if (!this.pendingPlaybackRetryTimer) {
+      return;
+    }
+
+    window.clearInterval(this.pendingPlaybackRetryTimer);
+    this.pendingPlaybackRetryTimer = undefined;
   }
 
   private async ensureAudioContextRunning(): Promise<void> {

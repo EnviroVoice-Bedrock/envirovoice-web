@@ -508,19 +508,24 @@ button:disabled {
 
 .mini-status-panel {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  padding: 12px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  padding: 14px;
   margin-bottom: 14px;
   border: 1px solid rgba(79, 126, 168, 0.55);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(19, 30, 43, 0.94), rgba(14, 22, 32, 0.94));
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(16, 24, 36, 0.96), rgba(12, 18, 28, 0.96));
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
 }
 
-.mini-status-row {
+.mini-status-block {
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(54, 83, 113, 0.75);
+  background: linear-gradient(180deg, rgba(22, 34, 48, 0.96), rgba(16, 25, 36, 0.96));
+  min-height: 90px;
 }
 
 .mini-status-label {
@@ -531,23 +536,41 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.mini-status-value {
+.mini-status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
   color: var(--text);
-  font-size: 0.98rem;
+  font-size: 1rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
+.mini-status-helper {
+  color: #8da5bc;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.mini-status-block-main {
+  border-color: rgba(92, 137, 184, 0.95);
+  background: linear-gradient(180deg, rgba(21, 36, 52, 0.98), rgba(14, 24, 35, 0.98));
+}
+
+.mini-status-ok,
 .mini-status-connected,
 .mini-status-ready {
   color: #a6f0d4;
 }
 
+.mini-status-info,
 .mini-status-reconnecting,
 .mini-status-requesting,
 .mini-status-connecting {
   color: #d0e8fa;
 }
 
+.mini-status-bad,
 .mini-status-disconnected,
 .mini-status-denied,
 .mini-status-unavailable,

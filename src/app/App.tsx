@@ -52,6 +52,8 @@ export const App = () => {
     selectedMicrophoneId,
     availableOutputDevices,
     selectedOutputDeviceId,
+    remoteTracksReceived,
+    remotePlaybackBlocked,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
@@ -171,6 +173,8 @@ export const App = () => {
           selectedMicrophoneId={selectedMicrophoneId}
           availableOutputDevices={availableOutputDevices}
           selectedOutputDeviceId={selectedOutputDeviceId}
+          remoteTracksReceived={remoteTracksReceived}
+          remotePlaybackBlocked={remotePlaybackBlocked}
           selfMuted={isSelfMuted}
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
