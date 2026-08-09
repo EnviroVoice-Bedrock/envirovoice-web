@@ -36,6 +36,7 @@ type AppState = {
   micSensitivity: number;
   localMicLevel: number;
   monitorSelfVoice: boolean;
+  advancedNoiseSuppression: boolean;
   availableMicrophones: MicrophoneOption[];
   selectedMicrophoneId: string | null;
   availableOutputDevices: OutputDeviceOption[];
@@ -57,6 +58,7 @@ type AppState = {
   setOutputDevice: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
   setMonitorSelfVoice: (enabled: boolean) => void;
+  setAdvancedNoiseSuppression: (enabled: boolean) => Promise<void>;
   setPeerVolume: (userId: string, volume: number) => void;
   leaveRoom: () => Promise<void>;
   setSelfMuted: (muted: boolean) => void;
@@ -365,6 +367,7 @@ export const useAppStore = create<AppState>((set, get) => {
     micSensitivity: 40,
     localMicLevel: 0,
     monitorSelfVoice: false,
+    advancedNoiseSuppression: true,
     availableMicrophones: [],
     selectedMicrophoneId: null,
     availableOutputDevices: [],
@@ -501,6 +504,22 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ monitorSelfVoice: enabled });
     },
 
+    setAdvancedNoiseSuppression: async (enabled) => {
+      webrtc.setAdvancedNoiseSuppression(enabled);
+      set({ advancedNoiseSuppression: enabled });
+
+      if (get().voiceStatus !== "ready") {
+        return;
+      }
+
+      try {
+        await webrtc.restartLocalAudio();
+      } catch (err) {
+        logger.error("EnviroVoice", "Failed to apply advanced suppression profile", err);
+        set({ errorMessage: "No se pudo aplicar el supresor avanzado" });
+      }
+    },
+
     setPeerVolume: (userId, volume) => {
       const safeVolume = Math.max(0, Math.min(2, volume));
       set((state) => ({
@@ -592,7 +611,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     startVoice: async () => {
-      const { session, currentRoom, isSelfMuted, selectedMicrophoneId, micSensitivity, monitorSelfVoice } = get();
+      const { session, currentRoom, isSelfMuted, selectedMicrophoneId, micSensitivity, monitorSelfVoice, advancedNoiseSuppression } = get();
       if (!session || !currentRoom) {
         return;
       }
@@ -600,6 +619,7 @@ export const useAppStore = create<AppState>((set, get) => {
       webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
       webrtc.configureInput(selectedMicrophoneId);
       webrtc.setSelfMonitor(monitorSelfVoice);
+      webrtc.setAdvancedNoiseSuppression(advancedNoiseSuppression);
       webrtc.setSpeakingThreshold(0.02 + ((100 - micSensitivity) / 100) * 0.1);
       set({ voiceStatus: "requesting" });
 
@@ -655,6 +675,7 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfMuted: false,
         isSelfDeafened: false,
         localMicLevel: 0,
+        advancedNoiseSuppression: true,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,
         deafenedUsers: {},
@@ -737,6 +758,7 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfMuted: false,
         isSelfDeafened: false,
         localMicLevel: 0,
+        advancedNoiseSuppression: true,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,
         deafenedUsers: {},
@@ -771,6 +793,7 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfDeafened: false,
         localMicLevel: 0,
         monitorSelfVoice: false,
+        advancedNoiseSuppression: true,
         selectedMicrophoneId: null,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,

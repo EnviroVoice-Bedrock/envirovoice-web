@@ -73,6 +73,9 @@ export class WebRtcService {
   private localWetGain: GainNode | null = null;
   private localNoiseGateGain: GainNode | null = null;
   private localMonitorGain: GainNode | null = null;
+  private localHighPass: BiquadFilterNode | null = null;
+  private localLowPass: BiquadFilterNode | null = null;
+  private localCompressor: DynamicsCompressorNode | null = null;
   private localProcessedDestination: MediaStreamAudioDestinationNode | null = null;
   private localSpeakingTimer: number | undefined;
   private lastSpeakingState = false;
@@ -81,6 +84,7 @@ export class WebRtcService {
   private speakingThreshold = 0.04;
   private monitorSelf = false;
   private noiseSuppressionEnabled = true;
+  private advancedNoiseSuppressionEnabled = false;
   private context: RoomContext | null = null;
   private readonly options: ServiceOptions;
   private readonly pendingPlaybackPeers = new Set<string>();
@@ -139,6 +143,11 @@ export class WebRtcService {
     }
   }
 
+  setAdvancedNoiseSuppression(enabled: boolean): void {
+    this.advancedNoiseSuppressionEnabled = enabled;
+    this.applyNoiseProfile();
+  }
+
   async restartLocalAudio(): Promise<MediaStream> {
     return this.createLocalAudio(true);
   }
@@ -174,11 +183,14 @@ export class WebRtcService {
 
     logger.log("EnviroVoice", "Requesting microphone");
     const inputStream = await navigator.mediaDevices.getUserMedia({
-      audio: this.selectedDeviceId
-        ? {
-            deviceId: { exact: this.selectedDeviceId }
-          }
-        : true,
+      audio: {
+        deviceId: this.selectedDeviceId ? { exact: this.selectedDeviceId } : undefined,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+        sampleRate: 48000
+      },
       video: false
     });
 
@@ -363,6 +375,9 @@ export class WebRtcService {
     this.localNoiseGateGain?.disconnect();
     this.localAnalyser?.disconnect();
     this.localMonitorGain?.disconnect();
+    this.localHighPass?.disconnect();
+    this.localLowPass?.disconnect();
+    this.localCompressor?.disconnect();
     this.localProcessedDestination?.disconnect();
     this.localSourceNode = null;
     this.localDryGain = null;
@@ -370,6 +385,9 @@ export class WebRtcService {
     this.localNoiseGateGain = null;
     this.localAnalyser = null;
     this.localMonitorGain = null;
+    this.localHighPass = null;
+    this.localLowPass = null;
+    this.localCompressor = null;
     this.localProcessedDestination = null;
 
     if (this.localAudioContext) {
@@ -697,28 +715,21 @@ export class WebRtcService {
     this.localNoiseGateGain.gain.value = 1;
     this.localMonitorGain.gain.value = this.monitorSelf ? 1 : 0;
 
-    const highPass = this.localAudioContext.createBiquadFilter();
-    highPass.type = "highpass";
-    highPass.frequency.value = 120;
-    highPass.Q.value = 0.707;
+    this.localHighPass = this.localAudioContext.createBiquadFilter();
+    this.localHighPass.type = "highpass";
 
-    const lowPass = this.localAudioContext.createBiquadFilter();
-    lowPass.type = "lowpass";
-    lowPass.frequency.value = 7600;
-    lowPass.Q.value = 0.707;
+    this.localLowPass = this.localAudioContext.createBiquadFilter();
+    this.localLowPass.type = "lowpass";
 
-    const compressor = this.localAudioContext.createDynamicsCompressor();
-    compressor.threshold.value = -38;
-    compressor.knee.value = 18;
-    compressor.ratio.value = 3.5;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.16;
+    this.localCompressor = this.localAudioContext.createDynamicsCompressor();
+
+    this.applyNoiseProfile();
 
     this.localSourceNode.connect(this.localDryGain);
-    this.localSourceNode.connect(highPass);
-    highPass.connect(lowPass);
-    lowPass.connect(compressor);
-    compressor.connect(this.localNoiseGateGain);
+    this.localSourceNode.connect(this.localHighPass);
+    this.localHighPass.connect(this.localLowPass);
+    this.localLowPass.connect(this.localCompressor);
+    this.localCompressor.connect(this.localNoiseGateGain);
     this.localNoiseGateGain.connect(this.localWetGain);
 
     this.localDryGain.connect(this.localAnalyser);
@@ -765,5 +776,38 @@ export class WebRtcService {
     }, 250);
 
     return this.localProcessedDestination.stream;
+  }
+
+  private applyNoiseProfile(): void {
+    if (!this.localHighPass || !this.localLowPass || !this.localCompressor) {
+      return;
+    }
+
+    if (this.advancedNoiseSuppressionEnabled) {
+      this.localHighPass.frequency.value = 170;
+      this.localHighPass.Q.value = 0.95;
+
+      this.localLowPass.frequency.value = 5300;
+      this.localLowPass.Q.value = 0.85;
+
+      this.localCompressor.threshold.value = -30;
+      this.localCompressor.knee.value = 12;
+      this.localCompressor.ratio.value = 6;
+      this.localCompressor.attack.value = 0.002;
+      this.localCompressor.release.value = 0.12;
+      return;
+    }
+
+    this.localHighPass.frequency.value = 120;
+    this.localHighPass.Q.value = 0.707;
+
+    this.localLowPass.frequency.value = 7600;
+    this.localLowPass.Q.value = 0.707;
+
+    this.localCompressor.threshold.value = -38;
+    this.localCompressor.knee.value = 18;
+    this.localCompressor.ratio.value = 3.5;
+    this.localCompressor.attack.value = 0.003;
+    this.localCompressor.release.value = 0.16;
   }
 }

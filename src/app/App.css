@@ -634,9 +634,12 @@ input[type="range"] {
 }
 
 .participant-item-speaking {
-  border-color: rgba(94, 216, 255, 0.72);
-  box-shadow: 0 0 0 1px rgba(94, 216, 255, 0.14), 0 0 18px rgba(94, 216, 255, 0.16);
-  background: radial-gradient(circle at 24% 50%, rgba(67, 173, 255, 0.16) 0%, rgba(26, 29, 36, 0.62) 40%);
+  border-color: rgba(95, 199, 255, 0.86);
+  box-shadow:
+    0 0 0 1px rgba(95, 199, 255, 0.24),
+    0 0 28px rgba(72, 184, 255, 0.3),
+    0 0 44px rgba(55, 145, 255, 0.2);
+  background: radial-gradient(circle at 24% 50%, rgba(67, 173, 255, 0.24) 0%, rgba(26, 29, 36, 0.62) 42%);
 }
 
 .avatar-frame {
@@ -651,24 +654,23 @@ input[type="range"] {
 }
 
 .avatar-frame-speaking {
-  border-color: #51b7ff;
-  box-shadow: 0 0 0 3px rgba(81, 183, 255, 0.14), 0 0 18px rgba(81, 183, 255, 0.52);
-  animation: speakPulse 900ms ease-in-out infinite;
-}
-
-.avatar-frame-idle {
-  animation: idleBreath 1800ms ease-in-out infinite;
+  border-color: #66d0ff;
+  box-shadow:
+    0 0 0 3px rgba(81, 183, 255, 0.2),
+    0 0 24px rgba(81, 183, 255, 0.65),
+    0 0 42px rgba(56, 133, 255, 0.42);
+  animation: speakPulse 640ms cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
 
 .avatar-frame-speaking::after {
   content: "";
   position: absolute;
-  inset: -8px;
+  inset: -12px;
   border-radius: 20px;
-  background: radial-gradient(circle, rgba(81, 183, 255, 0.45) 0%, rgba(81, 183, 255, 0.22) 34%, rgba(81, 183, 255, 0) 70%);
-  filter: blur(2px);
+  background: radial-gradient(circle, rgba(94, 210, 255, 0.62) 0%, rgba(77, 166, 255, 0.26) 36%, rgba(81, 183, 255, 0) 72%);
+  filter: blur(3px);
   z-index: -1;
-  animation: speakGlow 900ms ease-in-out infinite;
+  animation: speakGlow 640ms cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
 
 .avatar-frame {
@@ -825,37 +827,30 @@ input[type="range"] {
   0%,
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 3px rgba(81, 183, 255, 0.1), 0 0 18px rgba(81, 183, 255, 0.45);
+    box-shadow:
+      0 0 0 3px rgba(81, 183, 255, 0.16),
+      0 0 22px rgba(81, 183, 255, 0.56),
+      0 0 34px rgba(55, 145, 255, 0.26);
   }
 
   50% {
-    transform: scale(1.03);
-    box-shadow: 0 0 0 5px rgba(81, 183, 255, 0.16), 0 0 24px rgba(81, 183, 255, 0.72);
+    transform: scale(1.08);
+    box-shadow:
+      0 0 0 6px rgba(81, 183, 255, 0.3),
+      0 0 36px rgba(81, 183, 255, 0.88),
+      0 0 58px rgba(55, 145, 255, 0.36);
   }
 }
 
 @keyframes speakGlow {
   0%,
   100% {
-    opacity: 0.7;
-    transform: scale(0.96);
+    opacity: 0.68;
+    transform: scale(0.94);
   }
 
   50% {
     opacity: 1;
-    transform: scale(1.03);
-  }
-}
-
-@keyframes idleBreath {
-  0%,
-  100% {
-    transform: scale(0.98);
-    border-color: rgba(60, 95, 123, 0.9);
-  }
-
-  50% {
-    transform: scale(1);
-    border-color: rgba(83, 126, 162, 0.98);
+    transform: scale(1.08);
   }
 }

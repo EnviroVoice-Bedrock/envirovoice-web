@@ -13,6 +13,7 @@ type Props = {
   localMicLevel: number;
   micSensitivity: number;
   monitorSelfVoice: boolean;
+  advancedNoiseSuppression: boolean;
   availableMicrophones: Array<{ id: string; label: string }>;
   selectedMicrophoneId: string | null;
   availableOutputDevices: Array<{ id: string; label: string }>;
@@ -26,6 +27,7 @@ type Props = {
   onSetOutputDevice: (deviceId: string | null) => Promise<void>;
   onSetMicSensitivity: (value: number) => void;
   onSetMonitorSelfVoice: (enabled: boolean) => void;
+  onSetAdvancedNoiseSuppression: (enabled: boolean) => Promise<void>;
   onSetPeerVolume: (userId: string, volume: number) => void;
   onStartVoice: () => Promise<void>;
   onSetVoiceMode: (mode: "call" | "minecraft") => void;
@@ -50,6 +52,7 @@ export const RoomPage = ({
   localMicLevel,
   micSensitivity,
   monitorSelfVoice,
+  advancedNoiseSuppression,
   availableMicrophones,
   selectedMicrophoneId,
   availableOutputDevices,
@@ -63,6 +66,7 @@ export const RoomPage = ({
   onSetOutputDevice,
   onSetMicSensitivity,
   onSetMonitorSelfVoice,
+  onSetAdvancedNoiseSuppression,
   onSetPeerVolume,
   onStartVoice,
   onSetVoiceMode,
@@ -193,6 +197,16 @@ export const RoomPage = ({
             <label htmlFor="self-monitor" className="checkbox-row">
               <input id="self-monitor" type="checkbox" checked={monitorSelfVoice} onChange={(event) => onSetMonitorSelfVoice(event.target.checked)} />
               Monitor local
+            </label>
+
+            <label htmlFor="advanced-noise-suppression" className="checkbox-row">
+              <input
+                id="advanced-noise-suppression"
+                type="checkbox"
+                checked={advancedNoiseSuppression}
+                onChange={(event) => void onSetAdvancedNoiseSuppression(event.target.checked)}
+              />
+              Supresor de ruido avanzado (solo voz)
             </label>
 
             <div>

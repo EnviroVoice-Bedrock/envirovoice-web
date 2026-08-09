@@ -19,10 +19,11 @@ export const ParticipantList = ({ users, currentUserId, deafenedUsers, peerVolum
         const isSelf = user.id === currentUserId;
         const isDeafened = deafenedUsers[user.id];
         const volume = Math.max(0, Math.min(2, peerVolumes[user.id] ?? 1));
+        const isVoiceActive = user.speaking && !user.muted;
 
         return (
-          <li key={user.id} className={`participant-item ${user.speaking ? "participant-item-speaking" : ""}`}>
-            <div className={`avatar-frame ${user.speaking ? "avatar-frame-speaking" : "avatar-frame-idle"}`}>
+          <li key={user.id} className={`participant-item ${isVoiceActive ? "participant-item-speaking" : ""}`}>
+            <div className={`avatar-frame ${isVoiceActive ? "avatar-frame-speaking" : ""}`}>
               <img className="avatar avatar-image" src={getAvatarUrl(user.name)} alt={`Avatar de ${user.name}`} />
             </div>
             <div className="participant-info">

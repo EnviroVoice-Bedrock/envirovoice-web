@@ -46,6 +46,7 @@ export const App = () => {
     localMicLevel,
     micSensitivity,
     monitorSelfVoice,
+    advancedNoiseSuppression,
     availableMicrophones,
     selectedMicrophoneId,
     availableOutputDevices,
@@ -65,6 +66,7 @@ export const App = () => {
     setOutputDevice,
     setMicSensitivity,
     setMonitorSelfVoice,
+    setAdvancedNoiseSuppression,
     setPeerVolume,
     setSelfMuted,
     setSelfDeafened,
@@ -161,6 +163,7 @@ export const App = () => {
           localMicLevel={localMicLevel}
           micSensitivity={micSensitivity}
           monitorSelfVoice={monitorSelfVoice}
+          advancedNoiseSuppression={advancedNoiseSuppression}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
           availableOutputDevices={availableOutputDevices}
@@ -174,6 +177,7 @@ export const App = () => {
           onSetOutputDevice={setOutputDevice}
           onSetMicSensitivity={setMicSensitivity}
           onSetMonitorSelfVoice={setMonitorSelfVoice}
+          onSetAdvancedNoiseSuppression={setAdvancedNoiseSuppression}
           onSetPeerVolume={setPeerVolume}
           onStartVoice={startVoice}
           onSetVoiceMode={setVoiceMode}
