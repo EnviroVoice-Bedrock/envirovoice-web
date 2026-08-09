@@ -79,6 +79,8 @@ export const RoomPage = ({
       return distanceA - distanceB;
     });
 
+  const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : room.users;
+
   const micStatusText =
     voiceStatus === "ready"
       ? "Voz activa"
@@ -102,9 +104,9 @@ export const RoomPage = ({
       </header>
 
       <main className="room-stage">
-        {nearbyUsers.length ? (
+        {visibleUsers.length ? (
           <ParticipantList
-            users={nearbyUsers}
+            users={visibleUsers}
             currentUserId={userId}
             deafenedUsers={deafenedUsers}
             peerVolumes={peerVolumes}
