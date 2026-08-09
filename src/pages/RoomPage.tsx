@@ -3,6 +3,7 @@ import type { Room } from "../types/room";
 import envirovoiceLogo from "../../assets/Envirovoice Logo.png";
 import muteIcon from "../../assets/mute.png";
 import unmuteIcon from "../../assets/unmute.png";
+import { useState } from "react";
 
 type Props = {
   room: Room;
@@ -29,7 +30,6 @@ type Props = {
   onToggleSelfDeafen: () => void;
   onToggleUserDeafen: (userId: string) => void;
   onLeave: () => Promise<void>;
-  onLogout: () => void;
 };
 
 const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): number => {
@@ -63,9 +63,9 @@ export const RoomPage = ({
   onToggleSelfMute,
   onToggleSelfDeafen,
   onToggleUserDeafen,
-  onLeave,
-  onLogout
+  onLeave
 }: Props) => {
+  const [showVoiceSettings, setShowVoiceSettings] = useState(true);
   const selfUser = room.users.find((user) => user.id === userId);
   const nearbyUsers = room.users
     .filter((user) => user.id !== userId)
@@ -98,9 +98,14 @@ export const RoomPage = ({
     <section className="room-console-shell">
       <header className="room-topbar">
         <img className="room-topbar-logo" src={envirovoiceLogo} alt="EnviroVoice" />
-        <button type="button" className="room-disconnect" onClick={() => void onLeave()}>
-          Disconnect
-        </button>
+        <div className="room-topbar-actions">
+          <button type="button" className="button-secondary room-settings-button" onClick={() => setShowVoiceSettings((value) => !value)}>
+            Ajustes de voz
+          </button>
+          <button type="button" className="room-disconnect" onClick={() => void onLeave()}>
+            Disconnect
+          </button>
+        </div>
       </header>
 
       <main className="room-stage">
@@ -118,68 +123,70 @@ export const RoomPage = ({
         )}
       </main>
 
-      <aside className="room-settings-popover" aria-label="Ajustes de voz">
-        <div className="voice-settings-head">
-          <h2>Ajustes de voz</h2>
-          <span className={`voice-status voice-status-${voiceStatus}`}>{micStatusText}</span>
-        </div>
+      {showVoiceSettings && (
+        <aside className="room-settings-popover" aria-label="Ajustes de voz">
+          <div className="voice-settings-head">
+            <h2>Ajustes de voz</h2>
+            <span className={`voice-status voice-status-${voiceStatus}`}>{micStatusText}</span>
+          </div>
 
-        <div className="voice-mode-toggle" role="group" aria-label="Modo de voz">
-          <button type="button" className={`button-secondary ${voiceMode === "call" ? "mode-active" : ""}`} onClick={() => onSetVoiceMode("call")}>
-            Modo llamada
-          </button>
-          <button
-            type="button"
-            className={`button-secondary ${voiceMode === "minecraft" ? "mode-active" : ""}`}
-            onClick={() => onSetVoiceMode("minecraft")}
-          >
-            Modo Minecraft
-          </button>
-        </div>
-
-        <div className="voice-controls-grid">
-          <label htmlFor="microphone-select">Microfono</label>
-          <div className="voice-inline-row">
-            <select id="microphone-select" value={selectedMicrophoneId ?? ""} onChange={(event) => void onSetMicrophone(event.target.value || null)}>
-              {availableMicrophones.length === 0 && <option value="">Sin microfonos detectados</option>}
-              {availableMicrophones.map((mic) => (
-                <option key={mic.id} value={mic.id}>
-                  {mic.label}
-                </option>
-              ))}
-            </select>
-            <button type="button" className="button-secondary" onClick={() => void onRefreshMicrophones()}>
-              Actualizar
+          <div className="voice-mode-toggle" role="group" aria-label="Modo de voz">
+            <button type="button" className={`button-secondary ${voiceMode === "call" ? "mode-active" : ""}`} onClick={() => onSetVoiceMode("call")}>
+              Modo llamada
+            </button>
+            <button
+              type="button"
+              className={`button-secondary ${voiceMode === "minecraft" ? "mode-active" : ""}`}
+              onClick={() => onSetVoiceMode("minecraft")}
+            >
+              Modo Minecraft
             </button>
           </div>
 
-          <label htmlFor="sensitivity-range">Sensibilidad: {micSensitivity}%</label>
-          <input
-            id="sensitivity-range"
-            type="range"
-            min={1}
-            max={100}
-            value={micSensitivity}
-            onChange={(event) => onSetMicSensitivity(Number(event.target.value))}
-          />
-
-          <label htmlFor="self-monitor" className="checkbox-row">
-            <input id="self-monitor" type="checkbox" checked={monitorSelfVoice} onChange={(event) => onSetMonitorSelfVoice(event.target.checked)} />
-            Monitor local
-          </label>
-
-          <div>
-            <small>Nivel de entrada</small>
-            <div className="mic-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(localMicLevel * 100)}>
-              <div className="mic-meter-fill" style={{ width: `${Math.max(4, Math.round(localMicLevel * 100))}%` }} />
+          <div className="voice-controls-grid">
+            <label htmlFor="microphone-select">Microfono</label>
+            <div className="voice-inline-row">
+              <select id="microphone-select" value={selectedMicrophoneId ?? ""} onChange={(event) => void onSetMicrophone(event.target.value || null)}>
+                {availableMicrophones.length === 0 && <option value="">Sin microfonos detectados</option>}
+                {availableMicrophones.map((mic) => (
+                  <option key={mic.id} value={mic.id}>
+                    {mic.label}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="button-secondary" onClick={() => void onRefreshMicrophones()}>
+                Actualizar
+              </button>
             </div>
-          </div>
 
-          <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
-            {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
-          </button>
-        </div>
-      </aside>
+            <label htmlFor="sensitivity-range">Sensibilidad: {micSensitivity}%</label>
+            <input
+              id="sensitivity-range"
+              type="range"
+              min={1}
+              max={100}
+              value={micSensitivity}
+              onChange={(event) => onSetMicSensitivity(Number(event.target.value))}
+            />
+
+            <label htmlFor="self-monitor" className="checkbox-row">
+              <input id="self-monitor" type="checkbox" checked={monitorSelfVoice} onChange={(event) => onSetMonitorSelfVoice(event.target.checked)} />
+              Monitor local
+            </label>
+
+            <div>
+              <small>Nivel de entrada</small>
+              <div className="mic-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(localMicLevel * 100)}>
+                <div className="mic-meter-fill" style={{ width: `${Math.max(4, Math.round(localMicLevel * 100))}%` }} />
+              </div>
+            </div>
+
+            <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
+              {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
+            </button>
+          </div>
+        </aside>
+      )}
 
       <footer className="room-bottom-dock">
         <div className="dock-block dock-input">
@@ -201,17 +208,9 @@ export const RoomPage = ({
           </div>
         </div>
 
-        <button type="button" className="dock-status-button" onClick={() => void onStartVoice()}>
-          {voiceStatus === "ready" ? "VOICE ACTIVATED" : "ACTIVATE VOICE"}
-        </button>
-
         <div className="dock-block dock-actions">
-          <small>PUSH TO TALK</small>
           <button type="button" className={`button-secondary ${selfDeafened ? "button-warn" : ""}`} onClick={onToggleSelfDeafen}>
-            {selfDeafened ? "Off" : "On"}
-          </button>
-          <button type="button" className="button-secondary" onClick={onLogout}>
-            Logout
+            {selfDeafened ? "Escuchar" : "Ensordecer"}
           </button>
         </div>
       </footer>

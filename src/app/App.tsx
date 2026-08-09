@@ -66,7 +66,6 @@ export const App = () => {
     setSelfMuted,
     setSelfDeafened,
     toggleUserDeafen,
-    logout,
     clearError
   } = useAppStore();
 
@@ -131,7 +130,6 @@ export const App = () => {
           onToggleSelfDeafen={() => setSelfDeafened(!isSelfDeafened)}
           onToggleUserDeafen={toggleUserDeafen}
           onLeave={leaveRoom}
-          onLogout={() => void logout()}
         />
       )}
 

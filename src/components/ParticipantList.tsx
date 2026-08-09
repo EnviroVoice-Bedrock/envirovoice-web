@@ -21,11 +21,13 @@ export const ParticipantList = ({ users, currentUserId, deafenedUsers, peerVolum
         const volume = Math.max(0, Math.min(1, peerVolumes[user.id] ?? 1));
 
         return (
-          <li key={user.id} className="participant-item">
-            <img className="avatar avatar-image" src={getAvatarUrl(user.name)} alt={`Avatar de ${user.name}`} />
+          <li key={user.id} className={`participant-item ${user.speaking ? "participant-item-speaking" : ""}`}>
+            <div className={`avatar-frame ${user.speaking ? "avatar-frame-speaking" : ""}`}>
+              <img className="avatar avatar-image" src={getAvatarUrl(user.name)} alt={`Avatar de ${user.name}`} />
+            </div>
             <div className="participant-info">
               <strong>{user.name}</strong>
-              <span>{user.speaking ? "Hablando" : "En silencio"}</span>
+              <span className={user.speaking ? "participant-speaking-text" : "participant-silent-text"}>{user.speaking ? "Hablando" : "En silencio"}</span>
               {!isSelf && (
                 <div className="participant-volume">
                   <button type="button" className="button-secondary participant-volume-btn" onClick={() => onSetVolume(user.id, volume - 0.2)}>
