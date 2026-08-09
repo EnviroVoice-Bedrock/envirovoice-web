@@ -15,7 +15,6 @@ type Props = {
   availableMicrophones: Array<{ id: string; label: string }>;
   selectedMicrophoneId: string | null;
   selfMuted: boolean;
-  selfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
   onRefreshMicrophones: () => Promise<void>;
@@ -26,7 +25,6 @@ type Props = {
   onStartVoice: () => Promise<void>;
   onSetVoiceMode: (mode: "call" | "minecraft") => void;
   onToggleSelfMute: () => void;
-  onToggleSelfDeafen: () => void;
   onToggleUserDeafen: (userId: string) => void;
   onLeave: () => Promise<void>;
   onLogout: () => void;
@@ -50,7 +48,6 @@ export const RoomPage = ({
   availableMicrophones,
   selectedMicrophoneId,
   selfMuted,
-  selfDeafened,
   deafenedUsers,
   peerVolumes,
   onRefreshMicrophones,
@@ -61,7 +58,6 @@ export const RoomPage = ({
   onStartVoice,
   onSetVoiceMode,
   onToggleSelfMute,
-  onToggleSelfDeafen,
   onToggleUserDeafen,
   onLeave,
   onLogout
@@ -206,10 +202,6 @@ export const RoomPage = ({
         </button>
 
         <div className="dock-block dock-actions">
-          <small>PUSH TO TALK</small>
-          <button type="button" className={`button-secondary ${selfDeafened ? "button-warn" : ""}`} onClick={onToggleSelfDeafen}>
-            {selfDeafened ? "Off" : "On"}
-          </button>
           <button type="button" className="button-secondary" onClick={onLogout}>
             Logout
           </button>
