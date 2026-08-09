@@ -112,6 +112,7 @@ const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser): number
 export const useAppStore = create<AppState>((set, get) => {
   const signaling = new SignalingClient();
   const peerRecoveryTimers = new Map<string, number>();
+  let reconnectingRoom = false;
 
   const clearPeerRecoveryTimer = (userId: string): void => {
     const timer = peerRecoveryTimers.get(userId);
@@ -217,18 +218,46 @@ export const useAppStore = create<AppState>((set, get) => {
       return;
     }
 
-    signaling.send({
-      type: "join-room",
-      roomId: currentRoom.id,
-      from: session.id,
-      payload: { userName: session.name }
-    });
-
-    if (voiceStatus === "ready") {
-      webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
-      webrtc.setMicrophoneEnabled(!isSelfMuted);
-      void webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
+    if (reconnectingRoom) {
+      return;
     }
+
+    reconnectingRoom = true;
+    void (async () => {
+      try {
+        const refreshedRoom = await apiClient.joinRoom(currentRoom.id, session.id, session.name);
+        set({ currentRoom: refreshedRoom, errorMessage: null });
+
+        signaling.send({
+          type: "join-room",
+          roomId: refreshedRoom.id,
+          from: session.id,
+          payload: { userName: session.name }
+        });
+
+        if (voiceStatus === "ready") {
+          webrtc.setContext({ roomId: refreshedRoom.id, selfId: session.id });
+          webrtc.setMicrophoneEnabled(!isSelfMuted);
+          await webrtc.syncRoomPeers(refreshedRoom.users.map((user) => user.id));
+        }
+      } catch (err) {
+        logger.error("Rooms", "Failed to rejoin room after reconnect", err);
+
+        // If the room vanished while reconnecting, reset state so the user can rejoin cleanly.
+        set({
+          currentRoom: null,
+          voiceStatus: "idle",
+          peerStates: {},
+          deafenedUsers: {},
+          peerVolumes: {},
+          errorMessage: "Se perdio la sincronizacion de la sala, vuelve a entrar"
+        });
+
+        webrtc.reset();
+      } finally {
+        reconnectingRoom = false;
+      }
+    })();
   });
 
   const applyVoiceMix = (): void => {
@@ -260,8 +289,12 @@ export const useAppStore = create<AppState>((set, get) => {
   signaling.onMessage((message) => {
     if (message.type === "room-state" && message.payload) {
       const room = message.payload as Room;
+      const sessionId = get().session?.id;
       set((state) => ({
-        currentRoom: state.currentRoom?.id === room.id ? room : state.currentRoom,
+        currentRoom:
+          state.currentRoom?.id === room.id || (!state.currentRoom && sessionId && room.users.some((user) => user.id === sessionId))
+            ? room
+            : state.currentRoom,
         rooms: upsertRoom(state.rooms, room)
       }));
 
