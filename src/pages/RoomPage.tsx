@@ -8,30 +8,24 @@ import { useState } from "react";
 type Props = {
   room: Room;
   userId: string;
-  connectionStatus: "connecting" | "connected" | "disconnected" | "reconnecting";
   voiceMode: "call" | "minecraft";
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
   micSensitivity: number;
   monitorSelfVoice: boolean;
-  advancedNoiseSuppression: boolean;
   availableMicrophones: Array<{ id: string; label: string }>;
   selectedMicrophoneId: string | null;
   availableOutputDevices: Array<{ id: string; label: string }>;
   selectedOutputDeviceId: string | null;
-  remoteTracksReceived: Record<string, boolean>;
-  remotePlaybackBlocked: Record<string, boolean>;
   selfMuted: boolean;
   selfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
-  peerStates: Record<string, RTCPeerConnectionState>;
   onRefreshMicrophones: () => Promise<void>;
   onSetMicrophone: (deviceId: string | null) => Promise<void>;
   onSetOutputDevice: (deviceId: string | null) => Promise<void>;
   onSetMicSensitivity: (value: number) => void;
   onSetMonitorSelfVoice: (enabled: boolean) => void;
-  onSetAdvancedNoiseSuppression: (enabled: boolean) => Promise<void>;
   onSetPeerVolume: (userId: string, volume: number) => void;
   onStartVoice: () => Promise<void>;
   onSetVoiceMode: (mode: "call" | "minecraft") => void;
@@ -51,30 +45,24 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
 export const RoomPage = ({
   room,
   userId,
-  connectionStatus,
   voiceMode,
   voiceStatus,
   localMicLevel,
   micSensitivity,
   monitorSelfVoice,
-  advancedNoiseSuppression,
   availableMicrophones,
   selectedMicrophoneId,
   availableOutputDevices,
   selectedOutputDeviceId,
-  remoteTracksReceived,
-  remotePlaybackBlocked,
   selfMuted,
   selfDeafened,
   deafenedUsers,
   peerVolumes,
-  peerStates,
   onRefreshMicrophones,
   onSetMicrophone,
   onSetOutputDevice,
   onSetMicSensitivity,
   onSetMonitorSelfVoice,
-  onSetAdvancedNoiseSuppression,
   onSetPeerVolume,
   onStartVoice,
   onSetVoiceMode,
@@ -85,8 +73,7 @@ export const RoomPage = ({
 }: Props) => {
   const [showVoiceSettings, setShowVoiceSettings] = useState(true);
   const selfUser = room.users.find((user) => user.id === userId);
-  const uniqueUsers = Array.from(new Map(room.users.map((user) => [user.id, user])).values());
-  const nearbyUsers = uniqueUsers
+  const nearbyUsers = room.users
     .filter((user) => user.id !== userId)
     .sort((a, b) => {
       if (!selfUser) {
@@ -98,11 +85,7 @@ export const RoomPage = ({
       return distanceA - distanceB;
     });
 
-  const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : uniqueUsers;
-  const connectedPeerCount = Object.values(peerStates).filter((state) => state === "connected").length;
-  const receivedTrackCount = Object.values(remoteTracksReceived).filter(Boolean).length;
-  const blockedPlaybackCount = Object.values(remotePlaybackBlocked).filter(Boolean).length;
-  const liveVoiceCount = visibleUsers.filter((user) => user.speaking && !user.muted).length;
+  const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : room.users;
 
   const micStatusText =
     voiceStatus === "ready"
@@ -132,62 +115,6 @@ export const RoomPage = ({
       </header>
 
       <main className="room-stage">
-        <section className="mini-status-panel" aria-label="Panel de diagnostico">
-          <div className="mini-status-block mini-status-block-main">
-            <span className="mini-status-label">Conexión</span>
-            <strong className={`mini-status-pill mini-status-${connectionStatus}`}>{connectionStatus}</strong>
-            <small className="mini-status-helper">WebSocket activo y sincronizando sala</small>
-          </div>
-
-          <div className="mini-status-block">
-            <span className="mini-status-label">Voz</span>
-            <strong className={`mini-status-pill mini-status-${voiceStatus}`}>{voiceStatus}</strong>
-            <small className="mini-status-helper">Captura local y negociación WebRTC</small>
-          </div>
-
-          <div className="mini-status-block">
-            <span className="mini-status-label">Track remoto</span>
-            <strong className="mini-status-pill mini-status-ok">{receivedTrackCount}</strong>
-            <small className="mini-status-helper">Señal de audio recibida</small>
-          </div>
-
-          <div className="mini-status-block">
-            <span className="mini-status-label">Playback</span>
-            <strong className={`mini-status-pill ${blockedPlaybackCount ? "mini-status-bad" : "mini-status-ok"}`}>{blockedPlaybackCount ? `${blockedPlaybackCount} bloqueado` : "listo"}</strong>
-            <small className="mini-status-helper">Si está bloqueado, haz click en la ventana</small>
-          </div>
-
-          <div className="mini-status-block">
-            <span className="mini-status-label">Hablando</span>
-            <strong className="mini-status-pill mini-status-ok">{liveVoiceCount}</strong>
-            <small className="mini-status-helper">Usuarios con voz activa</small>
-          </div>
-
-          <div className="mini-status-block">
-            <span className="mini-status-label">Modo</span>
-            <strong className="mini-status-pill mini-status-info">{voiceMode}</strong>
-            <small className="mini-status-helper">Modo de mezcla activo</small>
-          </div>
-
-          <div className="mini-status-block">
-            <span className="mini-status-label">Usuarios</span>
-            <strong className="mini-status-pill mini-status-info">{visibleUsers.length}</strong>
-            <small className="mini-status-helper">Participantes en pantalla</small>
-          </div>
-
-          <div className="mini-status-block">
-            <span className="mini-status-label">Peers</span>
-            <strong className="mini-status-pill mini-status-info">{connectedPeerCount}</strong>
-            <small className="mini-status-helper">Conexiones WebRTC vivas</small>
-          </div>
-
-          <div className="mini-status-block">
-            <span className="mini-status-label">Micro</span>
-            <strong className="mini-status-pill mini-status-info">{Math.round(localMicLevel * 100)}%</strong>
-            <small className="mini-status-helper">Nivel de entrada actual</small>
-          </div>
-        </section>
-
         {visibleUsers.length ? (
           <ParticipantList
             users={visibleUsers}
@@ -266,16 +193,6 @@ export const RoomPage = ({
             <label htmlFor="self-monitor" className="checkbox-row">
               <input id="self-monitor" type="checkbox" checked={monitorSelfVoice} onChange={(event) => onSetMonitorSelfVoice(event.target.checked)} />
               Monitor local
-            </label>
-
-            <label htmlFor="advanced-noise-suppression" className="checkbox-row">
-              <input
-                id="advanced-noise-suppression"
-                type="checkbox"
-                checked={advancedNoiseSuppression}
-                onChange={(event) => void onSetAdvancedNoiseSuppression(event.target.checked)}
-              />
-              Supresor de ruido avanzado (solo voz)
             </label>
 
             <div>

@@ -12,12 +12,10 @@ type RemoteTrackCallback = (userId: string, stream: MediaStream) => void;
 type PeerStateCallback = (userId: string, state: RTCPeerConnectionState) => void;
 type LocalSpeakingCallback = (speaking: boolean) => void;
 type LocalLevelCallback = (level: number) => void;
-type RemotePlaybackStateCallback = (userId: string, state: "playing" | "blocked") => void;
 
 type ServiceOptions = {
   sendSignal: SignalSender;
   onRemoteTrack?: RemoteTrackCallback;
-  onRemotePlaybackState?: RemotePlaybackStateCallback;
   onPeerStateChange?: PeerStateCallback;
   onLocalSpeaking?: LocalSpeakingCallback;
   onLocalLevel?: LocalLevelCallback;
@@ -26,6 +24,10 @@ type ServiceOptions = {
 type RoomContext = {
   roomId: string;
   selfId: string;
+};
+
+type SinkAudioElement = HTMLAudioElement & {
+  setSinkId?: (sinkId: string) => Promise<void>;
 };
 
 const buildRtcConfiguration = (): RTCConfiguration => {
@@ -58,6 +60,10 @@ export class WebRtcService {
   private readonly audioElements = new Map<string, HTMLAudioElement>();
   private readonly deafenState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
+  private remoteAudioContext: AudioContext | null = null;
+  private readonly remoteSourceNodes = new Map<string, MediaStreamAudioSourceNode>();
+  private readonly remoteGainNodes = new Map<string, GainNode>();
+  private readonly remoteDestinations = new Map<string, MediaStreamAudioDestinationNode>();
   private localInputStream: MediaStream | null = null;
   private localStream: MediaStream | null = null;
   private localAudioContext: AudioContext | null = null;
@@ -67,9 +73,6 @@ export class WebRtcService {
   private localWetGain: GainNode | null = null;
   private localNoiseGateGain: GainNode | null = null;
   private localMonitorGain: GainNode | null = null;
-  private localHighPass: BiquadFilterNode | null = null;
-  private localLowPass: BiquadFilterNode | null = null;
-  private localCompressor: DynamicsCompressorNode | null = null;
   private localProcessedDestination: MediaStreamAudioDestinationNode | null = null;
   private localSpeakingTimer: number | undefined;
   private lastSpeakingState = false;
@@ -78,14 +81,13 @@ export class WebRtcService {
   private speakingThreshold = 0.04;
   private monitorSelf = false;
   private noiseSuppressionEnabled = true;
-  private advancedNoiseSuppressionEnabled = false;
   private context: RoomContext | null = null;
   private readonly options: ServiceOptions;
   private readonly pendingPlaybackPeers = new Set<string>();
-  private pendingPlaybackRetryTimer: number | undefined;
   private unlockAudioHandlerAttached = false;
   private readonly unlockAudioHandler = () => {
     void this.ensureAudioContextRunning();
+    void this.ensureRemoteAudioContextRunning();
     void this.retryPendingRemoteAudio();
   };
 
@@ -137,11 +139,6 @@ export class WebRtcService {
     }
   }
 
-  setAdvancedNoiseSuppression(enabled: boolean): void {
-    this.advancedNoiseSuppressionEnabled = enabled;
-    this.applyNoiseProfile();
-  }
-
   async restartLocalAudio(): Promise<MediaStream> {
     return this.createLocalAudio(true);
   }
@@ -177,14 +174,11 @@ export class WebRtcService {
 
     logger.log("EnviroVoice", "Requesting microphone");
     const inputStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: this.selectedDeviceId ? { exact: this.selectedDeviceId } : undefined,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
-        sampleRate: 48000
-      },
+      audio: this.selectedDeviceId
+        ? {
+            deviceId: { exact: this.selectedDeviceId }
+          }
+        : true,
       video: false
     });
 
@@ -298,12 +292,17 @@ export class WebRtcService {
   }
 
   setPeerVolume(peerId: string, volume: number): void {
-    const safeVolume = Math.max(0, Math.min(1, volume));
+    const safeVolume = Math.max(0, Math.min(2, volume));
     this.volumeState.set(peerId, safeVolume);
+
+    const gainNode = this.remoteGainNodes.get(peerId);
+    if (gainNode) {
+      gainNode.gain.value = safeVolume;
+    }
 
     const audio = this.audioElements.get(peerId);
     if (audio) {
-      audio.volume = safeVolume;
+      audio.volume = 1;
     }
   }
 
@@ -324,14 +323,28 @@ export class WebRtcService {
       this.audioElements.delete(peerId);
     }
 
+    const sourceNode = this.remoteSourceNodes.get(peerId);
+    if (sourceNode) {
+      sourceNode.disconnect();
+      this.remoteSourceNodes.delete(peerId);
+    }
+
+    const gainNode = this.remoteGainNodes.get(peerId);
+    if (gainNode) {
+      gainNode.disconnect();
+      this.remoteGainNodes.delete(peerId);
+    }
+
+    const destination = this.remoteDestinations.get(peerId);
+    if (destination) {
+      destination.disconnect();
+      this.remoteDestinations.delete(peerId);
+    }
+
     this.remoteStreams.delete(peerId);
     this.deafenState.delete(peerId);
     this.volumeState.delete(peerId);
     this.pendingPlaybackPeers.delete(peerId);
-
-    if (this.pendingPlaybackPeers.size === 0) {
-      this.stopPendingPlaybackRetryLoop();
-    }
   }
 
   reset(): void {
@@ -350,9 +363,6 @@ export class WebRtcService {
     this.localNoiseGateGain?.disconnect();
     this.localAnalyser?.disconnect();
     this.localMonitorGain?.disconnect();
-    this.localHighPass?.disconnect();
-    this.localLowPass?.disconnect();
-    this.localCompressor?.disconnect();
     this.localProcessedDestination?.disconnect();
     this.localSourceNode = null;
     this.localDryGain = null;
@@ -360,15 +370,21 @@ export class WebRtcService {
     this.localNoiseGateGain = null;
     this.localAnalyser = null;
     this.localMonitorGain = null;
-    this.localHighPass = null;
-    this.localLowPass = null;
-    this.localCompressor = null;
     this.localProcessedDestination = null;
 
     if (this.localAudioContext) {
       void this.localAudioContext.close();
       this.localAudioContext = null;
     }
+
+    if (this.remoteAudioContext) {
+      void this.remoteAudioContext.close();
+      this.remoteAudioContext = null;
+    }
+
+    this.remoteSourceNodes.clear();
+    this.remoteGainNodes.clear();
+    this.remoteDestinations.clear();
 
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
@@ -383,7 +399,6 @@ export class WebRtcService {
     this.context = null;
     this.lastSpeakingState = false;
     this.detachUnlockAudioHandlers();
-    this.stopPendingPlaybackRetryLoop();
   }
 
   private ensurePeer(peerId: string): RTCPeerConnection {
@@ -423,8 +438,8 @@ export class WebRtcService {
 
       this.remoteStreams.set(peerId, stream);
       this.bindAudioElement(peerId, stream);
-      this.options.onRemoteTrack?.(peerId, stream);
       logger.log("EnviroVoice", "Remote track received", { peerId });
+      this.options.onRemoteTrack?.(peerId, stream);
     };
 
     peer.onconnectionstatechange = () => {
@@ -497,15 +512,60 @@ export class WebRtcService {
       this.audioElements.set(peerId, audio);
     }
 
-    audio.srcObject = stream;
+    audio.srcObject = this.attachRemoteGainPipeline(peerId, stream);
     audio.muted = this.deafenState.get(peerId) ?? false;
-    audio.volume = this.volumeState.get(peerId) ?? 1;
+    audio.volume = 1;
     void this.applyOutputDevice(peerId, audio);
     void this.tryPlayRemoteAudio(peerId, audio);
   }
 
+  private attachRemoteGainPipeline(peerId: string, stream: MediaStream): MediaStream {
+    const context = this.ensureRemoteAudioContext();
+    const existingSource = this.remoteSourceNodes.get(peerId);
+    if (existingSource) {
+      existingSource.disconnect();
+      this.remoteSourceNodes.delete(peerId);
+    }
+
+    const existingGain = this.remoteGainNodes.get(peerId);
+    if (existingGain) {
+      existingGain.disconnect();
+      this.remoteGainNodes.delete(peerId);
+    }
+
+    const existingDestination = this.remoteDestinations.get(peerId);
+    if (existingDestination) {
+      existingDestination.disconnect();
+      this.remoteDestinations.delete(peerId);
+    }
+
+    const sourceNode = context.createMediaStreamSource(stream);
+    const gainNode = context.createGain();
+    gainNode.gain.value = this.volumeState.get(peerId) ?? 1;
+
+    const destination = context.createMediaStreamDestination();
+    sourceNode.connect(gainNode);
+    gainNode.connect(destination);
+
+    this.remoteSourceNodes.set(peerId, sourceNode);
+    this.remoteGainNodes.set(peerId, gainNode);
+    this.remoteDestinations.set(peerId, destination);
+
+    void this.ensureRemoteAudioContextRunning();
+
+    return destination.stream;
+  }
+
+  private ensureRemoteAudioContext(): AudioContext {
+    if (!this.remoteAudioContext) {
+      this.remoteAudioContext = new AudioContext();
+    }
+
+    return this.remoteAudioContext;
+  }
+
   private async applyOutputDevice(peerId: string, audio: HTMLAudioElement): Promise<void> {
-    const sinkAudio = audio as HTMLAudioElement & { setSinkId?: (sinkId: string) => Promise<void> };
+    const sinkAudio = audio as SinkAudioElement;
     if (!sinkAudio.setSinkId) {
       return;
     }
@@ -521,18 +581,15 @@ export class WebRtcService {
 
   private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {
     try {
+      await this.ensureRemoteAudioContextRunning();
       await audio.play();
-      this.options.onRemotePlaybackState?.(peerId, "playing");
       this.pendingPlaybackPeers.delete(peerId);
       if (this.pendingPlaybackPeers.size === 0) {
         this.detachUnlockAudioHandlers();
-        this.stopPendingPlaybackRetryLoop();
       }
     } catch (err) {
       this.pendingPlaybackPeers.add(peerId);
       this.attachUnlockAudioHandlers();
-      this.startPendingPlaybackRetryLoop();
-      this.options.onRemotePlaybackState?.(peerId, "blocked");
       logger.error("EnviroVoice", "Remote audio blocked until user interaction", err);
     }
   }
@@ -577,27 +634,7 @@ export class WebRtcService {
 
     if (this.pendingPlaybackPeers.size === 0) {
       this.detachUnlockAudioHandlers();
-      this.stopPendingPlaybackRetryLoop();
     }
-  }
-
-  private startPendingPlaybackRetryLoop(): void {
-    if (this.pendingPlaybackRetryTimer) {
-      return;
-    }
-
-    this.pendingPlaybackRetryTimer = window.setInterval(() => {
-      void this.retryPendingRemoteAudio();
-    }, 1200);
-  }
-
-  private stopPendingPlaybackRetryLoop(): void {
-    if (!this.pendingPlaybackRetryTimer) {
-      return;
-    }
-
-    window.clearInterval(this.pendingPlaybackRetryTimer);
-    this.pendingPlaybackRetryTimer = undefined;
   }
 
   private async ensureAudioContextRunning(): Promise<void> {
@@ -613,6 +650,22 @@ export class WebRtcService {
       await this.localAudioContext.resume();
     } catch (err) {
       logger.error("EnviroVoice", "Failed to resume local audio context", err);
+    }
+  }
+
+  private async ensureRemoteAudioContextRunning(): Promise<void> {
+    if (!this.remoteAudioContext) {
+      return;
+    }
+
+    if (this.remoteAudioContext.state === "running") {
+      return;
+    }
+
+    try {
+      await this.remoteAudioContext.resume();
+    } catch (err) {
+      logger.error("EnviroVoice", "Failed to resume remote audio context", err);
     }
   }
 
@@ -644,21 +697,28 @@ export class WebRtcService {
     this.localNoiseGateGain.gain.value = 1;
     this.localMonitorGain.gain.value = this.monitorSelf ? 1 : 0;
 
-    this.localHighPass = this.localAudioContext.createBiquadFilter();
-    this.localHighPass.type = "highpass";
+    const highPass = this.localAudioContext.createBiquadFilter();
+    highPass.type = "highpass";
+    highPass.frequency.value = 120;
+    highPass.Q.value = 0.707;
 
-    this.localLowPass = this.localAudioContext.createBiquadFilter();
-    this.localLowPass.type = "lowpass";
+    const lowPass = this.localAudioContext.createBiquadFilter();
+    lowPass.type = "lowpass";
+    lowPass.frequency.value = 7600;
+    lowPass.Q.value = 0.707;
 
-    this.localCompressor = this.localAudioContext.createDynamicsCompressor();
-
-    this.applyNoiseProfile();
+    const compressor = this.localAudioContext.createDynamicsCompressor();
+    compressor.threshold.value = -38;
+    compressor.knee.value = 18;
+    compressor.ratio.value = 3.5;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.16;
 
     this.localSourceNode.connect(this.localDryGain);
-    this.localSourceNode.connect(this.localHighPass);
-    this.localHighPass.connect(this.localLowPass);
-    this.localLowPass.connect(this.localCompressor);
-    this.localCompressor.connect(this.localNoiseGateGain);
+    this.localSourceNode.connect(highPass);
+    highPass.connect(lowPass);
+    lowPass.connect(compressor);
+    compressor.connect(this.localNoiseGateGain);
     this.localNoiseGateGain.connect(this.localWetGain);
 
     this.localDryGain.connect(this.localAnalyser);
@@ -705,38 +765,5 @@ export class WebRtcService {
     }, 250);
 
     return this.localProcessedDestination.stream;
-  }
-
-  private applyNoiseProfile(): void {
-    if (!this.localHighPass || !this.localLowPass || !this.localCompressor) {
-      return;
-    }
-
-    if (this.advancedNoiseSuppressionEnabled) {
-      this.localHighPass.frequency.value = 170;
-      this.localHighPass.Q.value = 0.95;
-
-      this.localLowPass.frequency.value = 5300;
-      this.localLowPass.Q.value = 0.85;
-
-      this.localCompressor.threshold.value = -30;
-      this.localCompressor.knee.value = 12;
-      this.localCompressor.ratio.value = 6;
-      this.localCompressor.attack.value = 0.002;
-      this.localCompressor.release.value = 0.12;
-      return;
-    }
-
-    this.localHighPass.frequency.value = 120;
-    this.localHighPass.Q.value = 0.707;
-
-    this.localLowPass.frequency.value = 7600;
-    this.localLowPass.Q.value = 0.707;
-
-    this.localCompressor.threshold.value = -38;
-    this.localCompressor.knee.value = 18;
-    this.localCompressor.ratio.value = 3.5;
-    this.localCompressor.attack.value = 0.003;
-    this.localCompressor.release.value = 0.16;
   }
 }

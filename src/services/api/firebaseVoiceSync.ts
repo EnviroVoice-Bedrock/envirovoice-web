@@ -56,23 +56,7 @@ const buildPayload = (source: MinecraftSnapshot, roomName: string, users: WebVoi
   }
 
   const players = Array.isArray(source.players) ? source.players : [];
-  const uniquePlayers: MinecraftPlayerPayload[] = [];
-  const seenKeys = new Set<string>();
-
-  for (const player of players) {
-    const key = normalizeName(player.id ?? player.name);
-    if (key && seenKeys.has(key)) {
-      continue;
-    }
-
-    if (key) {
-      seenKeys.add(key);
-    }
-
-    uniquePlayers.push(player);
-  }
-
-  const enrichedPlayers = uniquePlayers.map((player) => {
+  const enrichedPlayers = players.map((player) => {
     const key = normalizeName(player.name);
     const matched = usersByName.get(key);
 

@@ -41,24 +41,19 @@ export const App = () => {
   const {
     session,
     currentRoom,
-    connectionStatus,
     voiceMode,
     voiceStatus,
     localMicLevel,
     micSensitivity,
     monitorSelfVoice,
-    advancedNoiseSuppression,
     availableMicrophones,
     selectedMicrophoneId,
     availableOutputDevices,
     selectedOutputDeviceId,
-    remoteTracksReceived,
-    remotePlaybackBlocked,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
     peerVolumes,
-    peerStates,
     errorMessage,
     setSession,
     setVoiceMode,
@@ -70,7 +65,6 @@ export const App = () => {
     setOutputDevice,
     setMicSensitivity,
     setMonitorSelfVoice,
-    setAdvancedNoiseSuppression,
     setPeerVolume,
     setSelfMuted,
     setSelfDeafened,
@@ -162,30 +156,24 @@ export const App = () => {
         <RoomPage
           room={currentRoom}
           userId={session.id}
-          connectionStatus={connectionStatus}
           voiceMode={voiceMode}
           voiceStatus={voiceStatus}
           localMicLevel={localMicLevel}
           micSensitivity={micSensitivity}
           monitorSelfVoice={monitorSelfVoice}
-          advancedNoiseSuppression={advancedNoiseSuppression}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
           availableOutputDevices={availableOutputDevices}
           selectedOutputDeviceId={selectedOutputDeviceId}
-          remoteTracksReceived={remoteTracksReceived}
-          remotePlaybackBlocked={remotePlaybackBlocked}
           selfMuted={isSelfMuted}
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
           peerVolumes={peerVolumes}
-          peerStates={peerStates}
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
           onSetOutputDevice={setOutputDevice}
           onSetMicSensitivity={setMicSensitivity}
           onSetMonitorSelfVoice={setMonitorSelfVoice}
-          onSetAdvancedNoiseSuppression={setAdvancedNoiseSuppression}
           onSetPeerVolume={setPeerVolume}
           onStartVoice={startVoice}
           onSetVoiceMode={setVoiceMode}
