@@ -48,6 +48,7 @@ export const App = () => {
     availableMicrophones,
     selectedMicrophoneId,
     isSelfMuted,
+    isSelfDeafened,
     deafenedUsers,
     peerVolumes,
     errorMessage,
@@ -63,6 +64,7 @@ export const App = () => {
     setPeerVolume,
     leaveRoom,
     setSelfMuted,
+    setSelfDeafened,
     toggleUserDeafen,
     logout,
     clearError
@@ -115,6 +117,7 @@ export const App = () => {
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
           selfMuted={isSelfMuted}
+          selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
           peerVolumes={peerVolumes}
           onRefreshMicrophones={refreshMicrophones}
@@ -125,6 +128,7 @@ export const App = () => {
           onStartVoice={startVoice}
           onSetVoiceMode={setVoiceMode}
           onToggleSelfMute={() => setSelfMuted(!isSelfMuted)}
+          onToggleSelfDeafen={() => setSelfDeafened(!isSelfDeafened)}
           onToggleUserDeafen={toggleUserDeafen}
           onLeave={leaveRoom}
           onLogout={() => void logout()}

@@ -346,7 +346,7 @@ button:disabled {
 }
 
 .room-topbar-logo {
-  width: clamp(170px, 16vw, 250px);
+  width: clamp(220px, 22vw, 360px);
   max-width: 100%;
   filter: drop-shadow(0 0 16px rgba(99, 235, 223, 0.35));
 }
@@ -427,7 +427,6 @@ button:disabled {
 
 .dock-actions {
   justify-items: end;
-  align-content: end;
 }
 
 .button-with-icon {
