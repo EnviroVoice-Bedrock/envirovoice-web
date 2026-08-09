@@ -45,12 +45,12 @@ export const App = () => {
     localMicLevel,
     micSensitivity,
     monitorSelfVoice,
-    noiseSuppressionEnabled,
     availableMicrophones,
     selectedMicrophoneId,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
+    peerVolumes,
     errorMessage,
     setSession,
     setVoiceMode,
@@ -61,7 +61,7 @@ export const App = () => {
     setMicrophone,
     setMicSensitivity,
     setMonitorSelfVoice,
-    setNoiseSuppressionEnabled,
+    setPeerVolume,
     leaveRoom,
     setSelfMuted,
     setSelfDeafened,
@@ -114,17 +114,17 @@ export const App = () => {
           localMicLevel={localMicLevel}
           micSensitivity={micSensitivity}
           monitorSelfVoice={monitorSelfVoice}
-          noiseSuppressionEnabled={noiseSuppressionEnabled}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
           selfMuted={isSelfMuted}
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
+          peerVolumes={peerVolumes}
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
           onSetMicSensitivity={setMicSensitivity}
           onSetMonitorSelfVoice={setMonitorSelfVoice}
-          onSetNoiseSuppressionEnabled={setNoiseSuppressionEnabled}
+          onSetPeerVolume={setPeerVolume}
           onStartVoice={startVoice}
           onSetVoiceMode={setVoiceMode}
           onToggleSelfMute={() => setSelfMuted(!isSelfMuted)}

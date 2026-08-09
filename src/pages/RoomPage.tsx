@@ -1,5 +1,6 @@
 import { ParticipantList } from "../components/ParticipantList";
 import type { Room } from "../types/room";
+import envirovoiceLogo from "../../assets/Envirovoice Logo.png";
 import muteIcon from "../../assets/mute.png";
 import unmuteIcon from "../../assets/unmute.png";
 
@@ -11,17 +12,17 @@ type Props = {
   localMicLevel: number;
   micSensitivity: number;
   monitorSelfVoice: boolean;
-  noiseSuppressionEnabled: boolean;
   availableMicrophones: Array<{ id: string; label: string }>;
   selectedMicrophoneId: string | null;
   selfMuted: boolean;
   selfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
+  peerVolumes: Record<string, number>;
   onRefreshMicrophones: () => Promise<void>;
   onSetMicrophone: (deviceId: string | null) => Promise<void>;
   onSetMicSensitivity: (value: number) => void;
   onSetMonitorSelfVoice: (enabled: boolean) => void;
-  onSetNoiseSuppressionEnabled: (enabled: boolean) => void;
+  onSetPeerVolume: (userId: string, volume: number) => void;
   onStartVoice: () => Promise<void>;
   onSetVoiceMode: (mode: "call" | "minecraft") => void;
   onToggleSelfMute: () => void;
@@ -30,9 +31,6 @@ type Props = {
   onLeave: () => Promise<void>;
   onLogout: () => void;
 };
-
-const getAvatarUrl = (playerName: string): string =>
-  `https://mc-api.io/render/face/${encodeURIComponent(playerName.trim() || "WprousG")}/bedrock?size=256`;
 
 const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): number => {
   const dx = x1 - x2;
@@ -49,17 +47,17 @@ export const RoomPage = ({
   localMicLevel,
   micSensitivity,
   monitorSelfVoice,
-  noiseSuppressionEnabled,
   availableMicrophones,
   selectedMicrophoneId,
   selfMuted,
   selfDeafened,
   deafenedUsers,
+  peerVolumes,
   onRefreshMicrophones,
   onSetMicrophone,
   onSetMicSensitivity,
   onSetMonitorSelfVoice,
-  onSetNoiseSuppressionEnabled,
+  onSetPeerVolume,
   onStartVoice,
   onSetVoiceMode,
   onToggleSelfMute,
@@ -95,156 +93,126 @@ export const RoomPage = ({
               : "Voz inactiva";
 
   return (
-    <section className="room-shell">
-      <article className="room-card">
-        <div className="room-brand-row">
-          <strong className="room-brand-name">EnviroVoice</strong>
-        </div>
-        <small className="section-kicker">SALA ACTIVA</small>
-        <h1>{room.name}</h1>
-        <p>
-          {room.users.length} / {room.maxUsers} jugadores conectados
-        </p>
+    <section className="room-console-shell">
+      <header className="room-topbar">
+        <img className="room-topbar-logo" src={envirovoiceLogo} alt="EnviroVoice" />
+        <button type="button" className="room-disconnect" onClick={() => void onLeave()}>
+          Disconnect
+        </button>
+      </header>
 
-        {selfUser && (
-          <div className="self-user-card">
-            <img src={getAvatarUrl(selfUser.name)} alt={`Avatar de ${selfUser.name}`} />
-            <div>
-              <small>TU PERFIL</small>
-              <strong>{selfUser.name}</strong>
-            </div>
-          </div>
-        )}
-
-        <div className="self-controls">
-          <button type="button" className={`button-secondary ${selfMuted ? "button-warn" : ""}`} onClick={onToggleSelfMute}>
-            <span className="button-with-icon">
-              <img className="control-icon" src={selfMuted ? unmuteIcon : muteIcon} alt="Mic state" />
-              {selfMuted ? "Activar microfono" : "Silenciar microfono"}
-            </span>
-          </button>
-          <button type="button" className={`button-secondary ${selfDeafened ? "button-warn" : ""}`} onClick={onToggleSelfDeafen}>
-            {selfDeafened ? "🔊 Escuchar jugadores" : "🔇 Ensordecer"}
-          </button>
-        </div>
-
-        <section className="voice-settings" aria-label="Ajustes de voz">
-          <div className="voice-settings-head">
-            <h2>Ajustes de voz</h2>
-            <span className={`voice-status voice-status-${voiceStatus}`}>{micStatusText}</span>
-          </div>
-
-          <div className="voice-mode-toggle" role="group" aria-label="Modo de voz">
-            <button
-              type="button"
-              className={`button-secondary ${voiceMode === "call" ? "mode-active" : ""}`}
-              onClick={() => onSetVoiceMode("call")}
-            >
-              Modo llamada
-            </button>
-            <button
-              type="button"
-              className={`button-secondary ${voiceMode === "minecraft" ? "mode-active" : ""}`}
-              onClick={() => onSetVoiceMode("minecraft")}
-            >
-              Modo Minecraft
-            </button>
-          </div>
-
-          <p className="panel-note">
-            {voiceMode === "call"
-              ? "Modo llamada: voz directa entre usuarios, ideal para hablar fuera de Minecraft."
-              : "Modo Minecraft: solo se oye cuando llegan posiciones del addon de Minecraft."}
-          </p>
-
-          <div className="voice-controls-grid">
-            <label htmlFor="microphone-select">Microfono</label>
-            <div className="voice-inline-row">
-              <select
-                id="microphone-select"
-                value={selectedMicrophoneId ?? ""}
-                onChange={(event) => void onSetMicrophone(event.target.value || null)}
-              >
-                {availableMicrophones.length === 0 && <option value="">Sin microfonos detectados</option>}
-                {availableMicrophones.map((mic) => (
-                  <option key={mic.id} value={mic.id}>
-                    {mic.label}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="button-secondary" onClick={() => void onRefreshMicrophones()}>
-                Actualizar
-              </button>
-            </div>
-
-            <label htmlFor="sensitivity-range">Sensibilidad de voz: {micSensitivity}%</label>
-            <input
-              id="sensitivity-range"
-              type="range"
-              min={1}
-              max={100}
-              value={micSensitivity}
-              onChange={(event) => onSetMicSensitivity(Number(event.target.value))}
-            />
-
-            <label htmlFor="self-monitor" className="checkbox-row">
-              <input
-                id="self-monitor"
-                type="checkbox"
-                checked={monitorSelfVoice}
-                onChange={(event) => onSetMonitorSelfVoice(event.target.checked)}
-              />
-              Escuchar mi propia voz (prueba local)
-            </label>
-
-            <label htmlFor="noise-suppressor" className="checkbox-row">
-              <input
-                id="noise-suppressor"
-                type="checkbox"
-                checked={noiseSuppressionEnabled}
-                onChange={(event) => onSetNoiseSuppressionEnabled(event.target.checked)}
-              />
-              Supresor de ruido (nivel medio)
-            </label>
-
-            <div>
-              <small>Nivel de entrada</small>
-              <div className="mic-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(localMicLevel * 100)}>
-                <div className="mic-meter-fill" style={{ width: `${Math.max(4, Math.round(localMicLevel * 100))}%` }} />
-              </div>
-            </div>
-
-            <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
-              {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
-            </button>
-          </div>
-
-          <p className="panel-note">
-            Puedes probar sin Minecraft abriendo esta web en dos pestañas con usuarios distintos en la misma sala.
-          </p>
-        </section>
-
-        <div className="nearby-header">
-          <h2>Jugadores cerca</h2>
-          <span>{nearbyUsers.length}</span>
-        </div>
-
+      <main className="room-stage">
         {nearbyUsers.length ? (
-          <ParticipantList users={nearbyUsers} currentUserId={userId} deafenedUsers={deafenedUsers} onToggleDeafen={onToggleUserDeafen} />
+          <ParticipantList
+            users={nearbyUsers}
+            currentUserId={userId}
+            deafenedUsers={deafenedUsers}
+            peerVolumes={peerVolumes}
+            onToggleDeafen={onToggleUserDeafen}
+            onSetVolume={onSetPeerVolume}
+          />
         ) : (
           <p className="panel-note">Todavia no hay otros jugadores cerca.</p>
         )}
+      </main>
 
-        <footer className="room-actions">
-          <button type="button" className="button-secondary" onClick={() => void onLeave()}>
-            Salir de sala
+      <aside className="room-settings-popover" aria-label="Ajustes de voz">
+        <div className="voice-settings-head">
+          <h2>Ajustes de voz</h2>
+          <span className={`voice-status voice-status-${voiceStatus}`}>{micStatusText}</span>
+        </div>
+
+        <div className="voice-mode-toggle" role="group" aria-label="Modo de voz">
+          <button type="button" className={`button-secondary ${voiceMode === "call" ? "mode-active" : ""}`} onClick={() => onSetVoiceMode("call")}>
+            Modo llamada
+          </button>
+          <button
+            type="button"
+            className={`button-secondary ${voiceMode === "minecraft" ? "mode-active" : ""}`}
+            onClick={() => onSetVoiceMode("minecraft")}
+          >
+            Modo Minecraft
+          </button>
+        </div>
+
+        <div className="voice-controls-grid">
+          <label htmlFor="microphone-select">Microfono</label>
+          <div className="voice-inline-row">
+            <select id="microphone-select" value={selectedMicrophoneId ?? ""} onChange={(event) => void onSetMicrophone(event.target.value || null)}>
+              {availableMicrophones.length === 0 && <option value="">Sin microfonos detectados</option>}
+              {availableMicrophones.map((mic) => (
+                <option key={mic.id} value={mic.id}>
+                  {mic.label}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="button-secondary" onClick={() => void onRefreshMicrophones()}>
+              Actualizar
+            </button>
+          </div>
+
+          <label htmlFor="sensitivity-range">Sensibilidad: {micSensitivity}%</label>
+          <input
+            id="sensitivity-range"
+            type="range"
+            min={1}
+            max={100}
+            value={micSensitivity}
+            onChange={(event) => onSetMicSensitivity(Number(event.target.value))}
+          />
+
+          <label htmlFor="self-monitor" className="checkbox-row">
+            <input id="self-monitor" type="checkbox" checked={monitorSelfVoice} onChange={(event) => onSetMonitorSelfVoice(event.target.checked)} />
+            Monitor local
+          </label>
+
+          <div>
+            <small>Nivel de entrada</small>
+            <div className="mic-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(localMicLevel * 100)}>
+              <div className="mic-meter-fill" style={{ width: `${Math.max(4, Math.round(localMicLevel * 100))}%` }} />
+            </div>
+          </div>
+
+          <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
+            {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
+          </button>
+        </div>
+      </aside>
+
+      <footer className="room-bottom-dock">
+        <div className="dock-block dock-input">
+          <small>INPUT DEVICE</small>
+          <div className="dock-select-row">
+            <button type="button" className={`button-secondary ${selfMuted ? "button-warn" : ""}`} onClick={onToggleSelfMute}>
+              <span className="button-with-icon">
+                <img className="control-icon" src={selfMuted ? unmuteIcon : muteIcon} alt="Mic state" />
+              </span>
+            </button>
+            <select value={selectedMicrophoneId ?? ""} onChange={(event) => void onSetMicrophone(event.target.value || null)}>
+              {availableMicrophones.length === 0 && <option value="">Sin microfonos detectados</option>}
+              {availableMicrophones.map((mic) => (
+                <option key={mic.id} value={mic.id}>
+                  {mic.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <button type="button" className="dock-status-button" onClick={() => void onStartVoice()}>
+          {voiceStatus === "ready" ? "VOICE ACTIVATED" : "ACTIVATE VOICE"}
+        </button>
+
+        <div className="dock-block dock-actions">
+          <small>PUSH TO TALK</small>
+          <button type="button" className={`button-secondary ${selfDeafened ? "button-warn" : ""}`} onClick={onToggleSelfDeafen}>
+            {selfDeafened ? "Off" : "On"}
           </button>
           <button type="button" className="button-secondary" onClick={onLogout}>
-            Cerrar sesion
+            Logout
           </button>
-        </footer>
-        <small className="credits-line room-credits">DEVELOPED BY Halo333X, WprousG</small>
-      </article>
+        </div>
+      </footer>
     </section>
   );
 };

@@ -13,6 +13,7 @@ type Props = {
   selfMuted: boolean;
   selfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
+  peerVolumes?: Record<string, number>;
   onRefresh: () => Promise<void>;
   onCreateRoom: (name: string) => Promise<void>;
   onJoinRoom: (roomId: string) => Promise<void>;
@@ -20,6 +21,7 @@ type Props = {
   onToggleSelfMute: () => void;
   onToggleSelfDeafen: () => void;
   onToggleUserDeafen: (userId: string) => void;
+  onSetPeerVolume?: (userId: string, volume: number) => void;
   onLogout: () => void;
 };
 
@@ -47,6 +49,7 @@ export const DashboardPage = ({
   selfMuted,
   selfDeafened,
   deafenedUsers,
+  peerVolumes,
   onRefresh,
   onCreateRoom,
   onJoinRoom,
@@ -54,6 +57,7 @@ export const DashboardPage = ({
   onToggleSelfMute,
   onToggleSelfDeafen,
   onToggleUserDeafen,
+  onSetPeerVolume,
   onLogout
 }: Props) => {
   const [newRoomName, setNewRoomName] = useState("minecraft-global");
@@ -162,7 +166,9 @@ export const DashboardPage = ({
               users={currentRoom.users}
               currentUserId={userId}
               deafenedUsers={deafenedUsers}
+              peerVolumes={peerVolumes ?? {}}
               onToggleDeafen={onToggleUserDeafen}
+              onSetVolume={onSetPeerVolume ?? (() => undefined)}
             />
 
             <footer className="room-controls">

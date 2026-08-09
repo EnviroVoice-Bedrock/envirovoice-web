@@ -31,10 +31,10 @@ type AppState = {
   micSensitivity: number;
   localMicLevel: number;
   monitorSelfVoice: boolean;
-  noiseSuppressionEnabled: boolean;
   availableMicrophones: MicrophoneOption[];
   selectedMicrophoneId: string | null;
   deafenedUsers: Record<string, boolean>;
+  peerVolumes: Record<string, number>;
   errorMessage: string | null;
   signaling: SignalingClient;
   setSession: (name: string) => void;
@@ -49,7 +49,7 @@ type AppState = {
   setMicrophone: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
   setMonitorSelfVoice: (enabled: boolean) => void;
-  setNoiseSuppressionEnabled: (enabled: boolean) => void;
+  setPeerVolume: (userId: string, volume: number) => void;
   leaveRoom: () => Promise<void>;
   setSelfMuted: (muted: boolean) => void;
   setSelfDeafened: (deafened: boolean) => void;
@@ -111,6 +111,45 @@ const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser): number
 
 export const useAppStore = create<AppState>((set, get) => {
   const signaling = new SignalingClient();
+  const peerRecoveryTimers = new Map<string, number>();
+
+  const clearPeerRecoveryTimer = (userId: string): void => {
+    const timer = peerRecoveryTimers.get(userId);
+    if (!timer) {
+      return;
+    }
+
+    window.clearTimeout(timer);
+    peerRecoveryTimers.delete(userId);
+  };
+
+  const schedulePeerRecovery = (userId: string): void => {
+    clearPeerRecoveryTimer(userId);
+
+    const timer = window.setTimeout(() => {
+      peerRecoveryTimers.delete(userId);
+
+      const { session, currentRoom, voiceStatus } = get();
+      if (!session || !currentRoom || voiceStatus !== "ready") {
+        return;
+      }
+
+      webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
+      webrtc.closePeer(userId);
+      void webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
+    }, 2200);
+
+    peerRecoveryTimers.set(userId, timer);
+  };
+
+  const clearAllPeerRecoveryTimers = (): void => {
+    for (const timer of peerRecoveryTimers.values()) {
+      window.clearTimeout(timer);
+    }
+
+    peerRecoveryTimers.clear();
+  };
+
   const webrtc = new WebRtcService({
     sendSignal: (message) => {
       signaling.send(message);
@@ -122,6 +161,14 @@ export const useAppStore = create<AppState>((set, get) => {
           [userId]: state
         }
       }));
+
+      if (state === "connected") {
+        clearPeerRecoveryTimer(userId);
+      }
+
+      if (state === "disconnected" || state === "failed") {
+        schedulePeerRecovery(userId);
+      }
 
       if (state === "failed") {
         set({ errorMessage: "WebRTC failed" });
@@ -160,10 +207,32 @@ export const useAppStore = create<AppState>((set, get) => {
 
   signaling.onStatusChange((status) => {
     set({ connectionStatus: status });
+
+    if (status !== "connected") {
+      return;
+    }
+
+    const { session, currentRoom, voiceStatus, isSelfMuted } = get();
+    if (!session || !currentRoom) {
+      return;
+    }
+
+    signaling.send({
+      type: "join-room",
+      roomId: currentRoom.id,
+      from: session.id,
+      payload: { userName: session.name }
+    });
+
+    if (voiceStatus === "ready") {
+      webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
+      webrtc.setMicrophoneEnabled(!isSelfMuted);
+      void webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
+    }
   });
 
   const applyVoiceMix = (): void => {
-    const { currentRoom, session, voiceMode, isSelfDeafened, deafenedUsers } = get();
+    const { currentRoom, session, voiceMode, isSelfDeafened, deafenedUsers, peerVolumes } = get();
     if (!currentRoom || !session) {
       return;
     }
@@ -179,7 +248,9 @@ export const useAppStore = create<AppState>((set, get) => {
       }
 
       const manuallyDeafened = Boolean(deafenedUsers[user.id]) || isSelfDeafened;
-      const volume = voiceMode === "call" ? 1 : computeMinecraftVolume(selfUser, user);
+      const baseVolume = voiceMode === "call" ? 1 : computeMinecraftVolume(selfUser, user);
+      const personalVolume = peerVolumes[user.id] ?? 1;
+      const volume = Math.max(0, Math.min(1, baseVolume * personalVolume));
 
       webrtc.setPeerDeafened(user.id, manuallyDeafened);
       webrtc.setPeerVolume(user.id, manuallyDeafened ? 0 : volume);
@@ -223,6 +294,7 @@ export const useAppStore = create<AppState>((set, get) => {
     if (message.type === "user-left") {
       logger.log("Rooms", "User left", message.payload);
       if (message.from) {
+        clearPeerRecoveryTimer(message.from);
         webrtc.closePeer(message.from);
       }
       return;
@@ -279,10 +351,10 @@ export const useAppStore = create<AppState>((set, get) => {
     micSensitivity: 40,
     localMicLevel: 0,
     monitorSelfVoice: false,
-    noiseSuppressionEnabled: true,
     availableMicrophones: [],
     selectedMicrophoneId: null,
     deafenedUsers: {},
+    peerVolumes: {},
     errorMessage: null,
     signaling,
 
@@ -385,9 +457,15 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ monitorSelfVoice: enabled });
     },
 
-    setNoiseSuppressionEnabled: (enabled) => {
-      webrtc.setNoiseSuppressionEnabled(enabled);
-      set({ noiseSuppressionEnabled: enabled });
+    setPeerVolume: (userId, volume) => {
+      const safeVolume = Math.max(0, Math.min(1, volume));
+      set((state) => ({
+        peerVolumes: {
+          ...state.peerVolumes,
+          [userId]: safeVolume
+        }
+      }));
+      applyVoiceMix();
     },
 
     fetchRooms: async () => {
@@ -470,7 +548,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     startVoice: async () => {
-      const { session, currentRoom, isSelfMuted, selectedMicrophoneId, micSensitivity, monitorSelfVoice, noiseSuppressionEnabled } = get();
+      const { session, currentRoom, isSelfMuted, selectedMicrophoneId, micSensitivity, monitorSelfVoice } = get();
       if (!session || !currentRoom) {
         return;
       }
@@ -478,7 +556,6 @@ export const useAppStore = create<AppState>((set, get) => {
       webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
       webrtc.configureInput(selectedMicrophoneId);
       webrtc.setSelfMonitor(monitorSelfVoice);
-      webrtc.setNoiseSuppressionEnabled(noiseSuppressionEnabled);
       webrtc.setSpeakingThreshold(0.02 + ((100 - micSensitivity) / 100) * 0.1);
       set({ voiceStatus: "requesting" });
 
@@ -542,8 +619,11 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfMuted: false,
         isSelfDeafened: false,
         localMicLevel: 0,
-        deafenedUsers: {}
+        deafenedUsers: {},
+        peerVolumes: {}
       });
+
+      clearAllPeerRecoveryTimers();
 
       webrtc.reset();
 
@@ -604,8 +684,11 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfDeafened: false,
         localMicLevel: 0,
         deafenedUsers: {},
+        peerVolumes: {},
         errorMessage: null
       });
+
+      clearAllPeerRecoveryTimers();
 
       webrtc.reset();
     },
