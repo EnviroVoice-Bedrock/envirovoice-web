@@ -82,6 +82,7 @@ export class WebRtcService {
   private readonly pendingPlaybackPeers = new Set<string>();
   private unlockAudioHandlerAttached = false;
   private readonly unlockAudioHandler = () => {
+    void this.ensureAudioContextRunning();
     void this.retryPendingRemoteAudio();
   };
 
@@ -112,6 +113,11 @@ export class WebRtcService {
     this.monitorSelf = enabled;
     if (this.localMonitorGain) {
       this.localMonitorGain.gain.value = enabled ? 1 : 0;
+    }
+
+    if (enabled) {
+      void this.ensureAudioContextRunning();
+      this.attachUnlockAudioHandlers();
     }
   }
 
@@ -548,6 +554,22 @@ export class WebRtcService {
     }
   }
 
+  private async ensureAudioContextRunning(): Promise<void> {
+    if (!this.localAudioContext) {
+      return;
+    }
+
+    if (this.localAudioContext.state === "running") {
+      return;
+    }
+
+    try {
+      await this.localAudioContext.resume();
+    } catch (err) {
+      logger.error("EnviroVoice", "Failed to resume local audio context", err);
+    }
+  }
+
   private startLocalSpeakingDetector(stream: MediaStream): MediaStream {
     if (this.localSpeakingTimer) {
       window.clearInterval(this.localSpeakingTimer);
@@ -560,6 +582,7 @@ export class WebRtcService {
     }
 
     this.localAudioContext = new AudioContext();
+    void this.ensureAudioContextRunning();
     this.localAnalyser = this.localAudioContext.createAnalyser();
     this.localAnalyser.fftSize = 512;
 
