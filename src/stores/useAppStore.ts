@@ -264,7 +264,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const manuallyDeafened = Boolean(deafenedUsers[user.id]) || isSelfDeafened;
       const baseVolume = voiceMode === "call" ? 1 : computeMinecraftVolume(selfUser, user);
       const personalVolume = peerVolumes[user.id] ?? 1;
-      const volume = Math.max(0, Math.min(1, baseVolume * personalVolume));
+      const volume = Math.max(0, Math.min(2, baseVolume * personalVolume));
 
       webrtc.setPeerDeafened(user.id, manuallyDeafened);
       webrtc.setPeerVolume(user.id, manuallyDeafened ? 0 : volume);
@@ -502,7 +502,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     setPeerVolume: (userId, volume) => {
-      const safeVolume = Math.max(0, Math.min(1, volume));
+      const safeVolume = Math.max(0, Math.min(2, volume));
       set((state) => ({
         peerVolumes: {
           ...state.peerVolumes,

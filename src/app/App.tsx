@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MainLayout } from "../layouts/MainLayout";
 import { LoginPage } from "../pages/LoginPage";
 import { RoomPage } from "../pages/RoomPage";
+import { syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
 import { useAppStore } from "../stores/useAppStore";
 
 const DEFAULT_ROOM = "minecraft-global";
@@ -103,6 +104,43 @@ export const App = () => {
 
     void startVoice();
   }, [session, currentRoom, voiceStatus, startVoice]);
+
+  useEffect(() => {
+    if (!session || !currentRoom) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncNow = async (): Promise<void> => {
+      try {
+        await syncFirebaseVoiceState({
+          roomName: currentRoom.name,
+          users: currentRoom.users.map((user) => ({
+            id: user.id,
+            name: user.name,
+            speaking: user.speaking,
+            muted: user.muted,
+            deafened: deafenedUsers[user.id] ?? false
+          }))
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("[EnviroVoice] Firebase sync failed", err);
+        }
+      }
+    };
+
+    void syncNow();
+    const timer = window.setInterval(() => {
+      void syncNow();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [session, currentRoom, deafenedUsers]);
 
   return (
     <MainLayout>

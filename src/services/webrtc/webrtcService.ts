@@ -60,6 +60,10 @@ export class WebRtcService {
   private readonly audioElements = new Map<string, HTMLAudioElement>();
   private readonly deafenState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
+  private remoteAudioContext: AudioContext | null = null;
+  private readonly remoteSourceNodes = new Map<string, MediaStreamAudioSourceNode>();
+  private readonly remoteGainNodes = new Map<string, GainNode>();
+  private readonly remoteDestinations = new Map<string, MediaStreamAudioDestinationNode>();
   private localInputStream: MediaStream | null = null;
   private localStream: MediaStream | null = null;
   private localAudioContext: AudioContext | null = null;
@@ -83,6 +87,7 @@ export class WebRtcService {
   private unlockAudioHandlerAttached = false;
   private readonly unlockAudioHandler = () => {
     void this.ensureAudioContextRunning();
+    void this.ensureRemoteAudioContextRunning();
     void this.retryPendingRemoteAudio();
   };
 
@@ -287,12 +292,17 @@ export class WebRtcService {
   }
 
   setPeerVolume(peerId: string, volume: number): void {
-    const safeVolume = Math.max(0, Math.min(1, volume));
+    const safeVolume = Math.max(0, Math.min(2, volume));
     this.volumeState.set(peerId, safeVolume);
+
+    const gainNode = this.remoteGainNodes.get(peerId);
+    if (gainNode) {
+      gainNode.gain.value = safeVolume;
+    }
 
     const audio = this.audioElements.get(peerId);
     if (audio) {
-      audio.volume = safeVolume;
+      audio.volume = 1;
     }
   }
 
@@ -311,6 +321,24 @@ export class WebRtcService {
       audio.pause();
       audio.srcObject = null;
       this.audioElements.delete(peerId);
+    }
+
+    const sourceNode = this.remoteSourceNodes.get(peerId);
+    if (sourceNode) {
+      sourceNode.disconnect();
+      this.remoteSourceNodes.delete(peerId);
+    }
+
+    const gainNode = this.remoteGainNodes.get(peerId);
+    if (gainNode) {
+      gainNode.disconnect();
+      this.remoteGainNodes.delete(peerId);
+    }
+
+    const destination = this.remoteDestinations.get(peerId);
+    if (destination) {
+      destination.disconnect();
+      this.remoteDestinations.delete(peerId);
     }
 
     this.remoteStreams.delete(peerId);
@@ -348,6 +376,15 @@ export class WebRtcService {
       void this.localAudioContext.close();
       this.localAudioContext = null;
     }
+
+    if (this.remoteAudioContext) {
+      void this.remoteAudioContext.close();
+      this.remoteAudioContext = null;
+    }
+
+    this.remoteSourceNodes.clear();
+    this.remoteGainNodes.clear();
+    this.remoteDestinations.clear();
 
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
@@ -475,11 +512,56 @@ export class WebRtcService {
       this.audioElements.set(peerId, audio);
     }
 
-    audio.srcObject = stream;
+    audio.srcObject = this.attachRemoteGainPipeline(peerId, stream);
     audio.muted = this.deafenState.get(peerId) ?? false;
-    audio.volume = this.volumeState.get(peerId) ?? 1;
+    audio.volume = 1;
     void this.applyOutputDevice(peerId, audio);
     void this.tryPlayRemoteAudio(peerId, audio);
+  }
+
+  private attachRemoteGainPipeline(peerId: string, stream: MediaStream): MediaStream {
+    const context = this.ensureRemoteAudioContext();
+    const existingSource = this.remoteSourceNodes.get(peerId);
+    if (existingSource) {
+      existingSource.disconnect();
+      this.remoteSourceNodes.delete(peerId);
+    }
+
+    const existingGain = this.remoteGainNodes.get(peerId);
+    if (existingGain) {
+      existingGain.disconnect();
+      this.remoteGainNodes.delete(peerId);
+    }
+
+    const existingDestination = this.remoteDestinations.get(peerId);
+    if (existingDestination) {
+      existingDestination.disconnect();
+      this.remoteDestinations.delete(peerId);
+    }
+
+    const sourceNode = context.createMediaStreamSource(stream);
+    const gainNode = context.createGain();
+    gainNode.gain.value = this.volumeState.get(peerId) ?? 1;
+
+    const destination = context.createMediaStreamDestination();
+    sourceNode.connect(gainNode);
+    gainNode.connect(destination);
+
+    this.remoteSourceNodes.set(peerId, sourceNode);
+    this.remoteGainNodes.set(peerId, gainNode);
+    this.remoteDestinations.set(peerId, destination);
+
+    void this.ensureRemoteAudioContextRunning();
+
+    return destination.stream;
+  }
+
+  private ensureRemoteAudioContext(): AudioContext {
+    if (!this.remoteAudioContext) {
+      this.remoteAudioContext = new AudioContext();
+    }
+
+    return this.remoteAudioContext;
   }
 
   private async applyOutputDevice(peerId: string, audio: HTMLAudioElement): Promise<void> {
@@ -499,6 +581,7 @@ export class WebRtcService {
 
   private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {
     try {
+      await this.ensureRemoteAudioContextRunning();
       await audio.play();
       this.pendingPlaybackPeers.delete(peerId);
       if (this.pendingPlaybackPeers.size === 0) {
@@ -567,6 +650,22 @@ export class WebRtcService {
       await this.localAudioContext.resume();
     } catch (err) {
       logger.error("EnviroVoice", "Failed to resume local audio context", err);
+    }
+  }
+
+  private async ensureRemoteAudioContextRunning(): Promise<void> {
+    if (!this.remoteAudioContext) {
+      return;
+    }
+
+    if (this.remoteAudioContext.state === "running") {
+      return;
+    }
+
+    try {
+      await this.remoteAudioContext.resume();
+    } catch (err) {
+      logger.error("EnviroVoice", "Failed to resume remote audio context", err);
     }
   }
 

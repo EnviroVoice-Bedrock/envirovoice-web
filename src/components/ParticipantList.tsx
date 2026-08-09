@@ -18,16 +18,15 @@ export const ParticipantList = ({ users, currentUserId, deafenedUsers, peerVolum
       {users.map((user) => {
         const isSelf = user.id === currentUserId;
         const isDeafened = deafenedUsers[user.id];
-        const volume = Math.max(0, Math.min(1, peerVolumes[user.id] ?? 1));
+        const volume = Math.max(0, Math.min(2, peerVolumes[user.id] ?? 1));
 
         return (
           <li key={user.id} className={`participant-item ${user.speaking ? "participant-item-speaking" : ""}`}>
-            <div className={`avatar-frame ${user.speaking ? "avatar-frame-speaking" : ""}`}>
+            <div className={`avatar-frame ${user.speaking ? "avatar-frame-speaking" : "avatar-frame-idle"}`}>
               <img className="avatar avatar-image" src={getAvatarUrl(user.name)} alt={`Avatar de ${user.name}`} />
             </div>
             <div className="participant-info">
               <strong>{user.name}</strong>
-              <span className={user.speaking ? "participant-speaking-text" : "participant-silent-text"}>{user.speaking ? "Hablando" : "En silencio"}</span>
               {!isSelf && (
                 <div className="participant-volume">
                   <button type="button" className="button-secondary participant-volume-btn" onClick={() => onSetVolume(user.id, volume - 0.2)}>
@@ -36,7 +35,7 @@ export const ParticipantList = ({ users, currentUserId, deafenedUsers, peerVolum
                   <input
                     type="range"
                     min={0}
-                    max={100}
+                    max={200}
                     value={Math.round(volume * 100)}
                     onChange={(event) => onSetVolume(user.id, Number(event.target.value) / 100)}
                     aria-label={`Volumen de ${user.name}`}

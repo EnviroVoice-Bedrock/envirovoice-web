@@ -597,6 +597,29 @@ input[type="range"] {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 260px));
   gap: 16px;
+  max-height: min(58vh, 620px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+}
+
+.participant-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.participant-list::-webkit-scrollbar-track {
+  background: rgba(24, 38, 56, 0.8);
+  border-radius: 999px;
+}
+
+.participant-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(72, 145, 201, 0.86), rgba(58, 196, 202, 0.86));
+  border-radius: 999px;
+  border: 1px solid rgba(152, 221, 255, 0.22);
+}
+
+.participant-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(98, 173, 232, 0.95), rgba(77, 226, 216, 0.95));
 }
 
 .participant-item {
@@ -631,6 +654,10 @@ input[type="range"] {
   border-color: #51b7ff;
   box-shadow: 0 0 0 3px rgba(81, 183, 255, 0.14), 0 0 18px rgba(81, 183, 255, 0.52);
   animation: speakPulse 900ms ease-in-out infinite;
+}
+
+.avatar-frame-idle {
+  animation: idleBreath 1800ms ease-in-out infinite;
 }
 
 .avatar-frame-speaking::after {
@@ -817,5 +844,18 @@ input[type="range"] {
   50% {
     opacity: 1;
     transform: scale(1.03);
+  }
+}
+
+@keyframes idleBreath {
+  0%,
+  100% {
+    transform: scale(0.98);
+    border-color: rgba(60, 95, 123, 0.9);
+  }
+
+  50% {
+    transform: scale(1);
+    border-color: rgba(83, 126, 162, 0.98);
   }
 }
