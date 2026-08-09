@@ -31,6 +31,7 @@ type AppState = {
   micSensitivity: number;
   localMicLevel: number;
   monitorSelfVoice: boolean;
+  noiseSuppressionEnabled: boolean;
   availableMicrophones: MicrophoneOption[];
   selectedMicrophoneId: string | null;
   deafenedUsers: Record<string, boolean>;
@@ -48,6 +49,7 @@ type AppState = {
   setMicrophone: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
   setMonitorSelfVoice: (enabled: boolean) => void;
+  setNoiseSuppressionEnabled: (enabled: boolean) => void;
   leaveRoom: () => Promise<void>;
   setSelfMuted: (muted: boolean) => void;
   setSelfDeafened: (deafened: boolean) => void;
@@ -277,6 +279,7 @@ export const useAppStore = create<AppState>((set, get) => {
     micSensitivity: 40,
     localMicLevel: 0,
     monitorSelfVoice: false,
+    noiseSuppressionEnabled: true,
     availableMicrophones: [],
     selectedMicrophoneId: null,
     deafenedUsers: {},
@@ -382,6 +385,11 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ monitorSelfVoice: enabled });
     },
 
+    setNoiseSuppressionEnabled: (enabled) => {
+      webrtc.setNoiseSuppressionEnabled(enabled);
+      set({ noiseSuppressionEnabled: enabled });
+    },
+
     fetchRooms: async () => {
       try {
         const rooms = await apiClient.getRooms();
@@ -462,7 +470,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     startVoice: async () => {
-      const { session, currentRoom, isSelfMuted, selectedMicrophoneId, micSensitivity, monitorSelfVoice } = get();
+      const { session, currentRoom, isSelfMuted, selectedMicrophoneId, micSensitivity, monitorSelfVoice, noiseSuppressionEnabled } = get();
       if (!session || !currentRoom) {
         return;
       }
@@ -470,6 +478,7 @@ export const useAppStore = create<AppState>((set, get) => {
       webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
       webrtc.configureInput(selectedMicrophoneId);
       webrtc.setSelfMonitor(monitorSelfVoice);
+      webrtc.setNoiseSuppressionEnabled(noiseSuppressionEnabled);
       webrtc.setSpeakingThreshold(0.02 + ((100 - micSensitivity) / 100) * 0.1);
       set({ voiceStatus: "requesting" });
 

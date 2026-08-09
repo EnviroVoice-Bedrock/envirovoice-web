@@ -11,6 +11,7 @@ type Props = {
   localMicLevel: number;
   micSensitivity: number;
   monitorSelfVoice: boolean;
+  noiseSuppressionEnabled: boolean;
   availableMicrophones: Array<{ id: string; label: string }>;
   selectedMicrophoneId: string | null;
   selfMuted: boolean;
@@ -20,6 +21,7 @@ type Props = {
   onSetMicrophone: (deviceId: string | null) => Promise<void>;
   onSetMicSensitivity: (value: number) => void;
   onSetMonitorSelfVoice: (enabled: boolean) => void;
+  onSetNoiseSuppressionEnabled: (enabled: boolean) => void;
   onStartVoice: () => Promise<void>;
   onSetVoiceMode: (mode: "call" | "minecraft") => void;
   onToggleSelfMute: () => void;
@@ -47,6 +49,7 @@ export const RoomPage = ({
   localMicLevel,
   micSensitivity,
   monitorSelfVoice,
+  noiseSuppressionEnabled,
   availableMicrophones,
   selectedMicrophoneId,
   selfMuted,
@@ -56,6 +59,7 @@ export const RoomPage = ({
   onSetMicrophone,
   onSetMicSensitivity,
   onSetMonitorSelfVoice,
+  onSetNoiseSuppressionEnabled,
   onStartVoice,
   onSetVoiceMode,
   onToggleSelfMute,
@@ -191,6 +195,16 @@ export const RoomPage = ({
                 onChange={(event) => onSetMonitorSelfVoice(event.target.checked)}
               />
               Escuchar mi propia voz (prueba local)
+            </label>
+
+            <label htmlFor="noise-suppressor" className="checkbox-row">
+              <input
+                id="noise-suppressor"
+                type="checkbox"
+                checked={noiseSuppressionEnabled}
+                onChange={(event) => onSetNoiseSuppressionEnabled(event.target.checked)}
+              />
+              Supresor de ruido (nivel medio)
             </label>
 
             <div>

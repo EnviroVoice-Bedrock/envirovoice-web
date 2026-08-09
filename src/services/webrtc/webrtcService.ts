@@ -56,16 +56,22 @@ export class WebRtcService {
   private readonly audioElements = new Map<string, HTMLAudioElement>();
   private readonly deafenState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
+  private localInputStream: MediaStream | null = null;
   private localStream: MediaStream | null = null;
   private localAudioContext: AudioContext | null = null;
   private localAnalyser: AnalyserNode | null = null;
   private localSourceNode: MediaStreamAudioSourceNode | null = null;
+  private localDryGain: GainNode | null = null;
+  private localWetGain: GainNode | null = null;
+  private localNoiseGateGain: GainNode | null = null;
   private localMonitorGain: GainNode | null = null;
+  private localProcessedDestination: MediaStreamAudioDestinationNode | null = null;
   private localSpeakingTimer: number | undefined;
   private lastSpeakingState = false;
   private selectedDeviceId: string | null = null;
   private speakingThreshold = 0.04;
   private monitorSelf = false;
+  private noiseSuppressionEnabled = true;
   private context: RoomContext | null = null;
   private readonly options: ServiceOptions;
   private readonly pendingPlaybackPeers = new Set<string>();
@@ -97,6 +103,19 @@ export class WebRtcService {
     }
   }
 
+  setNoiseSuppressionEnabled(enabled: boolean): void {
+    this.noiseSuppressionEnabled = enabled;
+
+    if (this.localDryGain && this.localWetGain) {
+      this.localDryGain.gain.value = enabled ? 0 : 1;
+      this.localWetGain.gain.value = enabled ? 1 : 0;
+    }
+
+    if (this.localNoiseGateGain && !enabled) {
+      this.localNoiseGateGain.gain.value = 1;
+    }
+  }
+
   async restartLocalAudio(): Promise<MediaStream> {
     return this.createLocalAudio(true);
   }
@@ -125,8 +144,13 @@ export class WebRtcService {
       this.localStream = null;
     }
 
+    if (forceRestart && this.localInputStream) {
+      this.localInputStream.getTracks().forEach((track) => track.stop());
+      this.localInputStream = null;
+    }
+
     logger.log("EnviroVoice", "Requesting microphone");
-    const stream = await navigator.mediaDevices.getUserMedia({
+    const inputStream = await navigator.mediaDevices.getUserMedia({
       audio: this.selectedDeviceId
         ? {
             deviceId: { exact: this.selectedDeviceId }
@@ -135,13 +159,16 @@ export class WebRtcService {
       video: false
     });
 
+    this.localInputStream = inputStream;
+
+    const stream = this.startLocalSpeakingDetector(inputStream);
+
     const nextTrack = stream.getAudioTracks()[0];
     if (nextTrack) {
       this.replaceLocalTrackOnPeers(nextTrack, stream);
     }
 
     this.localStream = stream;
-    this.startLocalSpeakingDetector(stream);
     return stream;
   }
 
@@ -285,11 +312,19 @@ export class WebRtcService {
     }
 
     this.localSourceNode?.disconnect();
+    this.localDryGain?.disconnect();
+    this.localWetGain?.disconnect();
+    this.localNoiseGateGain?.disconnect();
     this.localAnalyser?.disconnect();
     this.localMonitorGain?.disconnect();
+    this.localProcessedDestination?.disconnect();
     this.localSourceNode = null;
+    this.localDryGain = null;
+    this.localWetGain = null;
+    this.localNoiseGateGain = null;
     this.localAnalyser = null;
     this.localMonitorGain = null;
+    this.localProcessedDestination = null;
 
     if (this.localAudioContext) {
       void this.localAudioContext.close();
@@ -299,6 +334,11 @@ export class WebRtcService {
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
+    }
+
+    if (this.localInputStream) {
+      this.localInputStream.getTracks().forEach((track) => track.stop());
+      this.localInputStream = null;
     }
 
     this.context = null;
@@ -480,7 +520,7 @@ export class WebRtcService {
     }
   }
 
-  private startLocalSpeakingDetector(stream: MediaStream): void {
+  private startLocalSpeakingDetector(stream: MediaStream): MediaStream {
     if (this.localSpeakingTimer) {
       window.clearInterval(this.localSpeakingTimer);
       this.localSpeakingTimer = undefined;
@@ -494,17 +534,53 @@ export class WebRtcService {
     this.localAudioContext = new AudioContext();
     this.localAnalyser = this.localAudioContext.createAnalyser();
     this.localAnalyser.fftSize = 512;
+
     this.localSourceNode = this.localAudioContext.createMediaStreamSource(stream);
+    this.localDryGain = this.localAudioContext.createGain();
+    this.localWetGain = this.localAudioContext.createGain();
+    this.localNoiseGateGain = this.localAudioContext.createGain();
+    this.localProcessedDestination = this.localAudioContext.createMediaStreamDestination();
     this.localMonitorGain = this.localAudioContext.createGain();
+
+    this.localDryGain.gain.value = this.noiseSuppressionEnabled ? 0 : 1;
+    this.localWetGain.gain.value = this.noiseSuppressionEnabled ? 1 : 0;
+    this.localNoiseGateGain.gain.value = 1;
     this.localMonitorGain.gain.value = this.monitorSelf ? 1 : 0;
-    this.localSourceNode.connect(this.localAnalyser);
-    this.localSourceNode.connect(this.localMonitorGain);
+
+    const highPass = this.localAudioContext.createBiquadFilter();
+    highPass.type = "highpass";
+    highPass.frequency.value = 120;
+    highPass.Q.value = 0.707;
+
+    const lowPass = this.localAudioContext.createBiquadFilter();
+    lowPass.type = "lowpass";
+    lowPass.frequency.value = 7600;
+    lowPass.Q.value = 0.707;
+
+    const compressor = this.localAudioContext.createDynamicsCompressor();
+    compressor.threshold.value = -38;
+    compressor.knee.value = 18;
+    compressor.ratio.value = 3.5;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.16;
+
+    this.localSourceNode.connect(this.localDryGain);
+    this.localSourceNode.connect(highPass);
+    highPass.connect(lowPass);
+    lowPass.connect(compressor);
+    compressor.connect(this.localNoiseGateGain);
+    this.localNoiseGateGain.connect(this.localWetGain);
+
+    this.localDryGain.connect(this.localAnalyser);
+    this.localWetGain.connect(this.localAnalyser);
+    this.localAnalyser.connect(this.localProcessedDestination);
+    this.localAnalyser.connect(this.localMonitorGain);
     this.localMonitorGain.connect(this.localAudioContext.destination);
 
     const data = new Uint8Array(this.localAnalyser.frequencyBinCount);
 
     this.localSpeakingTimer = window.setInterval(() => {
-      if (!this.localAnalyser) {
+      if (!this.localAnalyser || !this.localAudioContext) {
         return;
       }
 
@@ -519,6 +595,17 @@ export class WebRtcService {
       const speaking = rms > this.speakingThreshold;
       const level = Math.min(1, rms * 12);
 
+      if (this.localNoiseGateGain) {
+        if (this.noiseSuppressionEnabled) {
+          const gateThreshold = this.speakingThreshold * 0.72;
+          const target = rms > gateThreshold ? 1 : 0.18;
+          const smoothing = target > this.localNoiseGateGain.gain.value ? 0.018 : 0.08;
+          this.localNoiseGateGain.gain.setTargetAtTime(target, this.localAudioContext.currentTime, smoothing);
+        } else {
+          this.localNoiseGateGain.gain.setTargetAtTime(1, this.localAudioContext.currentTime, 0.03);
+        }
+      }
+
       this.options.onLocalLevel?.(level);
 
       if (speaking !== this.lastSpeakingState) {
@@ -526,5 +613,7 @@ export class WebRtcService {
         this.options.onLocalSpeaking?.(speaking);
       }
     }, 250);
+
+    return this.localProcessedDestination.stream;
   }
 }
