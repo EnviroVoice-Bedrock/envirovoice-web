@@ -74,6 +74,50 @@ const getEnvironmentLabel = (player: MinecraftPlayerPosition | undefined): strin
   return "Normal";
 };
 
+const resolveActiveEffectCode = (
+  player: MinecraftPlayerPosition | undefined,
+  environmentEffects: Record<EnvironmentEffectKey, boolean>
+): "none" | "underwater" | "buried" | "cave" => {
+  if (!player) {
+    return "none";
+  }
+
+  if (player.isUnderWater && environmentEffects.underwater) {
+    return "underwater";
+  }
+
+  if (player.isBuried && environmentEffects.buried) {
+    return "buried";
+  }
+
+  if (player.isInCave && environmentEffects.cave) {
+    return "cave";
+  }
+
+  return "none";
+};
+
+const formatAddonFlags = (player: MinecraftPlayerPosition | undefined): string => {
+  if (!player) {
+    return "flags: none";
+  }
+
+  const flags: string[] = [];
+  if (player.isUnderWater) {
+    flags.push("isUnderWater");
+  }
+
+  if (player.isBuried) {
+    flags.push("isBuried");
+  }
+
+  if (player.isInCave) {
+    flags.push("isInCave");
+  }
+
+  return flags.length > 0 ? `flags: ${flags.join(",")}` : "flags: none";
+};
+
 export const RoomPage = ({
   room,
   userId,
@@ -325,11 +369,16 @@ export const RoomPage = ({
               <p>Rango de voz: {safeMaxDistance} bloques</p>
               <p>Tu posicion: {selfCoordinates}</p>
               <ul>
-                {visibleUsers.map((user) => (
-                  <li key={`talk-${user.id}`}>
-                    {user.name}: {formatCoordinates(user)} isTalking={user.speaking ? "true" : "false"}
-                  </li>
-                ))}
+                {visibleUsers.map((user) => {
+                  const player = normalizedPlayers.get(user.name.trim().toLowerCase());
+                  const effectCode = resolveActiveEffectCode(player, environmentEffects);
+
+                  return (
+                    <li key={`talk-${user.id}`}>
+                      {user.name}: {formatCoordinates(user)} isTalking={user.speaking ? "true" : "false"} {formatAddonFlags(player)} effect={effectCode}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           </div>

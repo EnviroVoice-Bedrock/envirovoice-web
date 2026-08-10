@@ -332,7 +332,31 @@ export class WebRtcService {
 
   setPeerEnvironmentEffect(peerId: string, effect: RemoteEnvironmentEffect): void {
     this.peerEnvironmentState.set(peerId, effect);
+
+    // Effects are opt-in: when no addon flag is active, keep plain audio playback.
+    if (effect === "none") {
+      const processor = this.remoteProcessors.get(peerId);
+      const context = this.remoteAudioContext;
+      if (processor && context) {
+        processor.masterGain.gain.setTargetAtTime(0, context.currentTime, 0.02);
+      }
+
+      const audio = this.audioElements.get(peerId);
+      if (audio) {
+        audio.muted = false;
+      }
+      this.applyPeerAudioState(peerId);
+      return;
+    }
+
+    const audio = this.audioElements.get(peerId);
+    if (audio) {
+      this.ensureRemoteProcessor(peerId, audio);
+      audio.muted = true;
+    }
+
     this.applyPeerEnvironmentEffect(peerId);
+    this.applyPeerAudioState(peerId);
   }
 
   getDebugSnapshot(): WebRtcDebugSnapshot {
@@ -374,24 +398,7 @@ export class WebRtcService {
       this.audioElements.delete(peerId);
     }
 
-    const processor = this.remoteProcessors.get(peerId);
-    if (processor) {
-      processor.source.disconnect();
-      processor.masterGain.disconnect();
-      processor.baseGain.disconnect();
-      processor.underwaterLowPass.disconnect();
-      processor.underwaterPresence.disconnect();
-      processor.underwaterHighShelf.disconnect();
-      processor.underwaterGain.disconnect();
-      processor.buriedLowPass.disconnect();
-      processor.buriedBand.disconnect();
-      processor.buriedGain.disconnect();
-      processor.caveDelay.disconnect();
-      processor.caveFeedback.disconnect();
-      processor.caveLowPass.disconnect();
-      processor.caveWetGain.disconnect();
-      this.remoteProcessors.delete(peerId);
-    }
+    this.teardownRemoteProcessor(peerId);
 
     this.remoteStreams.delete(peerId);
     this.deafenState.delete(peerId);
@@ -581,10 +588,15 @@ export class WebRtcService {
     }
 
     audio.srcObject = stream;
-    audio.muted = true;
-    audio.volume = 1;
-    this.ensureRemoteProcessor(peerId, audio);
-    this.applyPeerEnvironmentEffect(peerId);
+    const effect = this.peerEnvironmentState.get(peerId) ?? "none";
+    if (effect !== "none") {
+      this.ensureRemoteProcessor(peerId, audio);
+      audio.muted = true;
+      this.applyPeerEnvironmentEffect(peerId);
+    } else {
+      audio.muted = false;
+    }
+
     this.applyPeerAudioState(peerId);
     void this.tryPlayRemoteAudio(peerId, audio);
   }
@@ -597,7 +609,8 @@ export class WebRtcService {
 
     const processor = this.remoteProcessors.get(peerId);
     const context = this.remoteAudioContext;
-    if (processor && context) {
+    const effect = this.peerEnvironmentState.get(peerId) ?? "none";
+    if (processor && context && effect !== "none") {
       processor.masterGain.gain.setTargetAtTime(targetGain, context.currentTime, 0.02);
       return;
     }
@@ -609,6 +622,29 @@ export class WebRtcService {
 
     audio.muted = targetGain <= 0.001;
     audio.volume = volume;
+  }
+
+  private teardownRemoteProcessor(peerId: string): void {
+    const processor = this.remoteProcessors.get(peerId);
+    if (!processor) {
+      return;
+    }
+
+    processor.source.disconnect();
+    processor.masterGain.disconnect();
+    processor.baseGain.disconnect();
+    processor.underwaterLowPass.disconnect();
+    processor.underwaterPresence.disconnect();
+    processor.underwaterHighShelf.disconnect();
+    processor.underwaterGain.disconnect();
+    processor.buriedLowPass.disconnect();
+    processor.buriedBand.disconnect();
+    processor.buriedGain.disconnect();
+    processor.caveDelay.disconnect();
+    processor.caveFeedback.disconnect();
+    processor.caveLowPass.disconnect();
+    processor.caveWetGain.disconnect();
+    this.remoteProcessors.delete(peerId);
   }
 
   private applyPeerEnvironmentEffect(peerId: string): void {
