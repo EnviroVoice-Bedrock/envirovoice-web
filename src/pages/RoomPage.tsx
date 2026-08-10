@@ -1,16 +1,20 @@
 import { ParticipantList } from "../components/ParticipantList";
 import type { Room } from "../types/room";
+import type { MinecraftPlayerPosition, MinecraftWorldState } from "../services/api/firebaseVoiceSync";
 import envirovoiceLogo from "../../assets/Envirovoice Logo.png";
 import muteIcon from "../../assets/mute.png";
 import unmuteIcon from "../../assets/unmute.png";
 import { useState } from "react";
 
+type EnvironmentEffect = "none" | "cave" | "underwater" | "mountain" | "buried";
+
 type Props = {
   room: Room;
   userId: string;
   minecraftRoomUrl: string;
-  minecraftPlayers: Array<{ name: string; x: number; y: number; z: number; dimension: string }>;
+  minecraftPlayers: MinecraftPlayerPosition[];
   minecraftMaxDistance: number;
+  minecraftEffects: MinecraftWorldState["effects"];
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
   availableMicrophones: Array<{ id: string; label: string }>;
@@ -49,12 +53,55 @@ const formatCoordinates = (user: Room["users"][number]): string =>
 const getPositionLabel = (user: Room["users"][number]): string =>
   hasMinecraftPosition(user) ? formatCoordinates(user) : "Sin coordenadas de Minecraft";
 
+const resolveEnvironmentEffect = (
+  player: MinecraftPlayerPosition | undefined,
+  effects: MinecraftWorldState["effects"]
+): EnvironmentEffect => {
+  if (!player) {
+    return "none";
+  }
+
+  if (effects.underwaterSound && player.isUnderWater) {
+    return "underwater";
+  }
+
+  if (effects.buriedSound && player.isBuried) {
+    return "buried";
+  }
+
+  if (effects.caveSound && player.isInCave) {
+    return "cave";
+  }
+
+  if (effects.mountainSound && (player.isInMountain ?? player.y >= 128)) {
+    return "mountain";
+  }
+
+  return "none";
+};
+
+const getEnvironmentEffectLabel = (effect: EnvironmentEffect): string | null => {
+  switch (effect) {
+    case "cave":
+      return "Efecto: cave";
+    case "underwater":
+      return "Efecto: underwater";
+    case "mountain":
+      return "Efecto: mountain";
+    case "buried":
+      return "Efecto: buried";
+    default:
+      return null;
+  }
+};
+
 export const RoomPage = ({
   room,
   userId,
   minecraftRoomUrl,
   minecraftPlayers,
   minecraftMaxDistance,
+  minecraftEffects,
   voiceStatus,
   localMicLevel,
   availableMicrophones,
@@ -75,6 +122,7 @@ export const RoomPage = ({
   const [showVoiceSettings, setShowVoiceSettings] = useState(true);
   const safeMaxDistance = Math.max(1, Math.min(50, Math.max(1, Math.min(300, minecraftMaxDistance))));
   const selfUser = room.users.find((user) => user.id === userId);
+  const minecraftPlayersByName = new Map(minecraftPlayers.map((player) => [player.name.trim().toLowerCase(), player]));
   const nearbyUsers = room.users
     .filter((user) => user.id !== userId)
     .sort((a, b) => {
@@ -90,6 +138,9 @@ export const RoomPage = ({
   const usersWithDistance = nearbyUsers.map((user) => {
     const personalVolume = clampVolume(peerVolumes[user.id] ?? 1);
     const manuallyDeafened = Boolean(deafenedUsers[user.id]) || selfDeafened;
+    const minecraftProfile = minecraftPlayersByName.get(user.name.trim().toLowerCase());
+    const environmentEffect = resolveEnvironmentEffect(minecraftProfile, minecraftEffects);
+    const environmentLabel = getEnvironmentEffectLabel(environmentEffect);
 
     if (!selfUser || !hasMinecraftPosition(selfUser) || !hasMinecraftPosition(user)) {
       return {
@@ -98,7 +149,8 @@ export const RoomPage = ({
         isNear: false,
         sameDimension: false,
         hasPosition: hasMinecraftPosition(user),
-        finalVolume: 0
+        finalVolume: 0,
+        environmentLabel
       };
     }
 
@@ -108,7 +160,7 @@ export const RoomPage = ({
     const baseVolume = isNear ? clampVolume(1 - distance / safeMaxDistance) : 0;
     const finalVolume = manuallyDeafened ? 0 : clampVolume(baseVolume * personalVolume);
 
-    return { user, distance, isNear, sameDimension, hasPosition: true, finalVolume };
+    return { user, distance, isNear, sameDimension, hasPosition: true, finalVolume, environmentLabel };
   });
 
   const closeUsers = usersWithDistance.filter((item) => item.isNear);
@@ -156,11 +208,12 @@ export const RoomPage = ({
 
           {closeUsers.length > 0 && (
             <ul className="nearby-users-list">
-              {closeUsers.map(({ user, distance, finalVolume }) => (
+              {closeUsers.map(({ user, distance, finalVolume, environmentLabel }) => (
                 <li key={`near-${user.id}`}>
                   <div className="nearby-user-meta">
                     <strong>{user.name}</strong>
                     <small>{getPositionLabel(user)}</small>
+                    {environmentLabel && <small>{environmentLabel}</small>}
                     <small>Volumen aplicado: {Math.round(finalVolume * 100)}%</small>
                   </div>
                   <span>{distance ?? "--"} bloques</span>
@@ -173,11 +226,12 @@ export const RoomPage = ({
             <details className="nearby-users-far">
               <summary>Fuera de rango o dimension distinta ({farUsers.length})</summary>
               <ul className="nearby-users-list nearby-users-list-far">
-                {farUsers.map(({ user, distance, sameDimension, finalVolume }) => (
+                {farUsers.map(({ user, distance, sameDimension, finalVolume, environmentLabel }) => (
                   <li key={`far-${user.id}`}>
                     <div className="nearby-user-meta">
                       <strong>{user.name}</strong>
                       <small>{getPositionLabel(user)}</small>
+                      {environmentLabel && <small>{environmentLabel}</small>}
                       <small>Volumen aplicado: {Math.round(finalVolume * 100)}%</small>
                     </div>
                     <span>{sameDimension ? `${distance ?? "--"} bloques` : "Dimension distinta"}</span>
@@ -191,11 +245,12 @@ export const RoomPage = ({
             <details className="nearby-users-far">
               <summary>Sin datos de Minecraft ({usersWithoutData.length})</summary>
               <ul className="nearby-users-list nearby-users-list-far">
-                {usersWithoutData.map(({ user, finalVolume }) => (
+                {usersWithoutData.map(({ user, finalVolume, environmentLabel }) => (
                   <li key={`missing-${user.id}`}>
                     <div className="nearby-user-meta">
                       <strong>{user.name}</strong>
                       <small>{getPositionLabel(user)}</small>
+                      {environmentLabel && <small>{environmentLabel}</small>}
                       <small>Volumen aplicado: {Math.round(finalVolume * 100)}%</small>
                     </div>
                     <span>Esperando snapshot</span>
@@ -211,6 +266,7 @@ export const RoomPage = ({
             users={visibleUsers}
             currentUserId={userId}
             minecraftPlayers={minecraftPlayers}
+            minecraftEffects={minecraftEffects}
             deafenedUsers={deafenedUsers}
             peerVolumes={peerVolumes}
             onToggleDeafen={onToggleUserDeafen}

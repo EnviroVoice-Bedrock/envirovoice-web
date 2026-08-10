@@ -26,6 +26,8 @@ type PeerDebugInfo = {
   audioReceivers: number;
 };
 
+type EnvironmentEffect = "none" | "cave" | "underwater" | "mountain" | "buried";
+
 type AppState = {
   session: UserSession | null;
   rooms: Room[];
@@ -40,6 +42,13 @@ type AppState = {
   localMicLevel: number;
   monitorSelfVoice: boolean;
   minecraftMaxDistance: number;
+  minecraftEffects: {
+    caveSound: boolean;
+    underwaterSound: boolean;
+    mountainSound: boolean;
+    buriedSound: boolean;
+  };
+  minecraftPlayerEffects: Record<string, EnvironmentEffect>;
   availableMicrophones: MicrophoneOption[];
   selectedMicrophoneId: string | null;
   debugPeerInfo: Record<string, PeerDebugInfo>;
@@ -152,6 +161,29 @@ const isAppleMobileBrowser = (): boolean => {
   const isCriOS = /CriOS/i.test(ua);
   const isFxiOS = /FxiOS/i.test(ua);
   return isIOS && isWebKit && !isCriOS && !isFxiOS;
+};
+
+const resolveEnvironmentEffect = (
+  player: MinecraftPlayerPosition,
+  effects: AppState["minecraftEffects"]
+): EnvironmentEffect => {
+  if (effects.underwaterSound && player.isUnderWater) {
+    return "underwater";
+  }
+
+  if (effects.buriedSound && player.isBuried) {
+    return "buried";
+  }
+
+  if (effects.caveSound && player.isInCave) {
+    return "cave";
+  }
+
+  if (effects.mountainSound && (player.isInMountain ?? player.y >= 128)) {
+    return "mountain";
+  }
+
+  return "none";
 };
 
 const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDistance: number): number => {
@@ -308,7 +340,7 @@ export const useAppStore = create<AppState>((set, get) => {
   });
 
   const applyVoiceMix = (): void => {
-    const { currentRoom, session, minecraftMaxDistance, isSelfDeafened, deafenedUsers, peerVolumes } = get();
+    const { currentRoom, session, minecraftMaxDistance, minecraftPlayerEffects, isSelfDeafened, deafenedUsers, peerVolumes } = get();
     if (!currentRoom || !session) {
       return;
     }
@@ -327,9 +359,11 @@ export const useAppStore = create<AppState>((set, get) => {
       const baseVolume = computeMinecraftVolume(selfUser, user, minecraftMaxDistance);
       const personalVolume = peerVolumes[user.id] ?? 1;
       const volume = Math.max(0, Math.min(1, baseVolume * personalVolume));
+      const environmentEffect = minecraftPlayerEffects[normalizeUserName(user.name)] ?? "none";
 
       webrtc.setPeerDeafened(user.id, manuallyDeafened);
       webrtc.setPeerVolume(user.id, manuallyDeafened ? 0 : volume);
+      webrtc.setPeerEnvironmentEffect(user.id, environmentEffect);
     }
   };
 
@@ -446,6 +480,13 @@ export const useAppStore = create<AppState>((set, get) => {
     localMicLevel: 0,
     monitorSelfVoice: false,
     minecraftMaxDistance: 50,
+    minecraftEffects: {
+      caveSound: false,
+      underwaterSound: false,
+      mountainSound: false,
+      buriedSound: false
+    },
+    minecraftPlayerEffects: {},
     availableMicrophones: [],
     selectedMicrophoneId: null,
     debugPeerInfo: {},
@@ -634,7 +675,15 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     applyMinecraftWorldState: (worldState) => {
-      set({ minecraftMaxDistance: worldState.maxDistance });
+      const minecraftPlayerEffects = Object.fromEntries(
+        worldState.players.map((player) => [normalizeUserName(player.name), resolveEnvironmentEffect(player, worldState.effects)])
+      ) as Record<string, EnvironmentEffect>;
+
+      set({
+        minecraftMaxDistance: worldState.maxDistance,
+        minecraftEffects: worldState.effects,
+        minecraftPlayerEffects
+      });
       get().applyMinecraftPlayerPositions(worldState.players);
       applyVoiceMix();
     },

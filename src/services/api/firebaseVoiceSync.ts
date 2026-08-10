@@ -40,12 +40,22 @@ export type MinecraftPlayerPosition = {
   isMuted?: boolean;
   isDeafen?: boolean;
   microphoneVolume?: number;
+  isInCave?: boolean;
+  isUnderWater?: boolean;
+  isInMountain?: boolean;
+  isBuried?: boolean;
 };
 
 export type MinecraftWorldState = {
   players: MinecraftPlayerPosition[];
   maxDistance: number;
   roomUrl: string;
+  effects: {
+    caveSound: boolean;
+    underwaterSound: boolean;
+    mountainSound: boolean;
+    buriedSound: boolean;
+  };
 };
 
 const REQUEST_TIMEOUT_MS = 1500;
@@ -103,6 +113,20 @@ const toBoolean = (value: unknown): boolean | null => {
   }
 
   return null;
+};
+
+const extractServerBoolean = (snapshot: MinecraftSnapshot, key: string, fallback = false): boolean => {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return fallback;
+  }
+
+  const server = (snapshot as Record<string, unknown>).server;
+  if (!server || typeof server !== "object") {
+    return fallback;
+  }
+
+  const value = toBoolean((server as Record<string, unknown>)[key]);
+  return value ?? fallback;
 };
 
 const ensureJsonUrl = (url: string): string => {
@@ -189,6 +213,10 @@ const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPo
   const microphoneVolume = toNumber(candidate.microphoneVolume);
   const isMuted = toBoolean(candidate.isMuted);
   const isDeafen = toBoolean(candidate.isDeafen);
+  const isInCave = toBoolean(candidate.isInCave ?? candidate.cave);
+  const isUnderWater = toBoolean(candidate.isUnderWater ?? candidate.underwater);
+  const isInMountain = toBoolean(candidate.isInMountain ?? candidate.mountain);
+  const isBuried = toBoolean(candidate.isBuried ?? candidate.buried);
 
   return {
     name,
@@ -198,7 +226,11 @@ const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPo
     dimension,
     microphoneVolume: microphoneVolume == null ? undefined : microphoneVolume,
     isMuted: isMuted ?? undefined,
-    isDeafen: isDeafen ?? undefined
+    isDeafen: isDeafen ?? undefined,
+    isInCave: isInCave ?? undefined,
+    isUnderWater: isUnderWater ?? undefined,
+    isInMountain: isInMountain ?? undefined,
+    isBuried: isBuried ?? undefined
   };
 };
 
@@ -353,7 +385,13 @@ export const fetchMinecraftWorldState = async (options?: { baseUri?: string }): 
   return {
     players: collectPlayerPositions(snapshot),
     maxDistance: extractMaxDistance(snapshot),
-    roomUrl: extractRoomUrl(snapshot)
+    roomUrl: extractRoomUrl(snapshot),
+    effects: {
+      caveSound: extractServerBoolean(snapshot, "caveSound"),
+      underwaterSound: extractServerBoolean(snapshot, "underwaterSound"),
+      mountainSound: extractServerBoolean(snapshot, "mountainSound"),
+      buriedSound: extractServerBoolean(snapshot, "buriedSound")
+    }
   };
 };
 

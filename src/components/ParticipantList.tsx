@@ -1,9 +1,13 @@
+import type { MinecraftPlayerPosition, MinecraftWorldState } from "../services/api/firebaseVoiceSync";
 import type { RoomUser } from "../types/room";
+
+type EnvironmentEffect = "none" | "cave" | "underwater" | "mountain" | "buried";
 
 type Props = {
   users: RoomUser[];
   currentUserId: string;
-  minecraftPlayers: Array<{ name: string; isMuted?: boolean; isDeafen?: boolean; microphoneVolume?: number }>;
+  minecraftPlayers: MinecraftPlayerPosition[];
+  minecraftEffects: MinecraftWorldState["effects"];
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
   onToggleDeafen: (userId: string) => void;
@@ -15,7 +19,49 @@ const getAvatarUrl = (playerName: string): string =>
 
 const normalizeName = (name: string): string => name.trim().toLowerCase();
 
-export const ParticipantList = ({ users, currentUserId, minecraftPlayers, deafenedUsers, peerVolumes, onToggleDeafen, onSetVolume }: Props) => {
+const resolveEnvironmentEffect = (
+  player: MinecraftPlayerPosition | undefined,
+  effects: MinecraftWorldState["effects"]
+): EnvironmentEffect => {
+  if (!player) {
+    return "none";
+  }
+
+  if (effects.underwaterSound && player.isUnderWater) {
+    return "underwater";
+  }
+
+  if (effects.buriedSound && player.isBuried) {
+    return "buried";
+  }
+
+  if (effects.caveSound && player.isInCave) {
+    return "cave";
+  }
+
+  if (effects.mountainSound && (player.isInMountain ?? player.y >= 128)) {
+    return "mountain";
+  }
+
+  return "none";
+};
+
+const getEnvironmentEffectLabel = (effect: EnvironmentEffect): string | null => {
+  switch (effect) {
+    case "cave":
+      return "Efecto: cave";
+    case "underwater":
+      return "Efecto: underwater";
+    case "mountain":
+      return "Efecto: mountain";
+    case "buried":
+      return "Efecto: buried";
+    default:
+      return null;
+  }
+};
+
+export const ParticipantList = ({ users, currentUserId, minecraftPlayers, minecraftEffects, deafenedUsers, peerVolumes, onToggleDeafen, onSetVolume }: Props) => {
   const minecraftPlayersByName = new Map(minecraftPlayers.map((player) => [normalizeName(player.name), player]));
 
   return (
@@ -26,6 +72,7 @@ export const ParticipantList = ({ users, currentUserId, minecraftPlayers, deafen
         const volume = Math.max(0, Math.min(2, peerVolumes[user.id] ?? 1));
         const isVoiceActive = user.speaking && !user.muted;
         const minecraftProfile = minecraftPlayersByName.get(normalizeName(user.name));
+        const environmentLabel = getEnvironmentEffectLabel(resolveEnvironmentEffect(minecraftProfile, minecraftEffects));
         const minecraftMuted = Boolean(minecraftProfile?.isMuted) || (minecraftProfile?.microphoneVolume ?? 100) === 0;
         const minecraftDeafened = Boolean(minecraftProfile?.isDeafen);
         const volumeMuted = volume === 0;
@@ -41,6 +88,7 @@ export const ParticipantList = ({ users, currentUserId, minecraftPlayers, deafen
               <small className="participant-minecraft-state">
                 {minecraftMuted ? "Muteado en Minecraft" : minecraftDeafened ? "Ensordecido en Minecraft" : `Minecraft vol ${minecraftProfile?.microphoneVolume ?? 100}%`}
               </small>
+              {environmentLabel && <small className="participant-minecraft-state">{environmentLabel}</small>}
               {!isSelf && (
                 <div className="participant-volume">
                   <button type="button" className="button-secondary participant-volume-btn" onClick={() => onSetVolume(user.id, volume - 0.2)}>

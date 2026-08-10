@@ -39,6 +39,25 @@ type RoomContext = {
   selfId: string;
 };
 
+type EnvironmentEffect = "none" | "cave" | "underwater" | "mountain" | "buried";
+
+type RemoteAudioChain = {
+  source: MediaStreamAudioSourceNode;
+  dryGain: GainNode;
+  caveGain: GainNode;
+  underwaterGain: GainNode;
+  mountainGain: GainNode;
+  buriedGain: GainNode;
+  caveLowPass: BiquadFilterNode;
+  cavePeaking: BiquadFilterNode;
+  underwaterLowPass: BiquadFilterNode;
+  mountainHighPass: BiquadFilterNode;
+  mountainHighShelf: BiquadFilterNode;
+  buriedLowPass: BiquadFilterNode;
+  buriedLowShelf: BiquadFilterNode;
+  destination: MediaStreamAudioDestinationNode;
+};
+
 const buildRtcConfiguration = (): RTCConfiguration => {
   const turnUrl = import.meta.env.VITE_TURN_URL;
   const turnUsername = import.meta.env.VITE_TURN_USERNAME;
@@ -67,13 +86,16 @@ export class WebRtcService {
   private readonly peers = new Map<string, RTCPeerConnection>();
   private readonly remoteStreams = new Map<string, MediaStream>();
   private readonly audioElements = new Map<string, HTMLAudioElement>();
+  private readonly remoteAudioChains = new Map<string, RemoteAudioChain>();
   private readonly deafenState = new Map<string, boolean>();
+  private readonly environmentEffectState = new Map<string, EnvironmentEffect>();
   private readonly proximityMuteState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
   private readonly pendingIceCandidates = new Map<string, RTCIceCandidateInit[]>();
   private localInputStream: MediaStream | null = null;
   private localStream: MediaStream | null = null;
   private localAudioContext: AudioContext | null = null;
+  private remoteAudioContext: AudioContext | null = null;
   private localAnalyser: AnalyserNode | null = null;
   private localSourceNode: MediaStreamAudioSourceNode | null = null;
   private localDryGain: GainNode | null = null;
@@ -308,6 +330,11 @@ export class WebRtcService {
     this.applyPeerAudioState(peerId);
   }
 
+  setPeerEnvironmentEffect(peerId: string, effect: EnvironmentEffect): void {
+    this.environmentEffectState.set(peerId, effect);
+    this.applyPeerEnvironmentEffect(peerId);
+  }
+
   getDebugSnapshot(): WebRtcDebugSnapshot {
     const peers: Record<string, PeerDebugState> = {};
 
@@ -347,8 +374,28 @@ export class WebRtcService {
       this.audioElements.delete(peerId);
     }
 
+    const chain = this.remoteAudioChains.get(peerId);
+    if (chain) {
+      chain.source.disconnect();
+      chain.dryGain.disconnect();
+      chain.caveGain.disconnect();
+      chain.underwaterGain.disconnect();
+      chain.mountainGain.disconnect();
+      chain.buriedGain.disconnect();
+      chain.caveLowPass.disconnect();
+      chain.cavePeaking.disconnect();
+      chain.underwaterLowPass.disconnect();
+      chain.mountainHighPass.disconnect();
+      chain.mountainHighShelf.disconnect();
+      chain.buriedLowPass.disconnect();
+      chain.buriedLowShelf.disconnect();
+      chain.destination.disconnect();
+      this.remoteAudioChains.delete(peerId);
+    }
+
     this.remoteStreams.delete(peerId);
     this.deafenState.delete(peerId);
+    this.environmentEffectState.delete(peerId);
     this.proximityMuteState.delete(peerId);
     this.volumeState.delete(peerId);
     this.pendingIceCandidates.delete(peerId);
@@ -383,6 +430,11 @@ export class WebRtcService {
     if (this.localAudioContext) {
       void this.localAudioContext.close();
       this.localAudioContext = null;
+    }
+
+    if (this.remoteAudioContext) {
+      void this.remoteAudioContext.close();
+      this.remoteAudioContext = null;
     }
 
     if (this.localStream) {
@@ -528,9 +580,119 @@ export class WebRtcService {
       this.audioElements.set(peerId, audio);
     }
 
-    audio.srcObject = stream;
+    const processedStream = this.bindRemoteAudioGraph(peerId, stream) ?? stream;
+    audio.srcObject = processedStream;
     this.applyPeerAudioState(peerId);
+    this.applyPeerEnvironmentEffect(peerId);
     void this.tryPlayRemoteAudio(peerId, audio);
+  }
+
+  private bindRemoteAudioGraph(peerId: string, stream: MediaStream): MediaStream | null {
+    try {
+      if (!this.remoteAudioContext) {
+        this.remoteAudioContext = new AudioContext();
+      }
+
+      let chain = this.remoteAudioChains.get(peerId);
+      if (!chain) {
+        const source = this.remoteAudioContext.createMediaStreamSource(stream);
+        const dryGain = this.remoteAudioContext.createGain();
+        const caveGain = this.remoteAudioContext.createGain();
+        const underwaterGain = this.remoteAudioContext.createGain();
+        const mountainGain = this.remoteAudioContext.createGain();
+        const buriedGain = this.remoteAudioContext.createGain();
+        const caveLowPass = this.remoteAudioContext.createBiquadFilter();
+        const cavePeaking = this.remoteAudioContext.createBiquadFilter();
+        const underwaterLowPass = this.remoteAudioContext.createBiquadFilter();
+        const mountainHighPass = this.remoteAudioContext.createBiquadFilter();
+        const mountainHighShelf = this.remoteAudioContext.createBiquadFilter();
+        const buriedLowPass = this.remoteAudioContext.createBiquadFilter();
+        const buriedLowShelf = this.remoteAudioContext.createBiquadFilter();
+        const destination = this.remoteAudioContext.createMediaStreamDestination();
+
+        caveLowPass.type = "lowpass";
+        caveLowPass.frequency.value = 2200;
+        caveLowPass.Q.value = 0.7;
+
+        cavePeaking.type = "peaking";
+        cavePeaking.frequency.value = 700;
+        cavePeaking.Q.value = 1.2;
+        cavePeaking.gain.value = 4;
+
+        underwaterLowPass.type = "lowpass";
+        underwaterLowPass.frequency.value = 850;
+        underwaterLowPass.Q.value = 0.9;
+
+        mountainHighPass.type = "highpass";
+        mountainHighPass.frequency.value = 280;
+        mountainHighPass.Q.value = 0.8;
+
+        mountainHighShelf.type = "highshelf";
+        mountainHighShelf.frequency.value = 3200;
+        mountainHighShelf.gain.value = 5;
+
+        buriedLowPass.type = "lowpass";
+        buriedLowPass.frequency.value = 520;
+        buriedLowPass.Q.value = 0.85;
+
+        buriedLowShelf.type = "lowshelf";
+        buriedLowShelf.frequency.value = 240;
+        buriedLowShelf.gain.value = 3;
+
+        dryGain.gain.value = 1;
+        caveGain.gain.value = 0;
+        underwaterGain.gain.value = 0;
+        mountainGain.gain.value = 0;
+        buriedGain.gain.value = 0;
+
+        source.connect(dryGain);
+        dryGain.connect(destination);
+
+        source.connect(caveLowPass);
+        caveLowPass.connect(cavePeaking);
+        cavePeaking.connect(caveGain);
+        caveGain.connect(destination);
+
+        source.connect(underwaterLowPass);
+        underwaterLowPass.connect(underwaterGain);
+        underwaterGain.connect(destination);
+
+        source.connect(mountainHighPass);
+        mountainHighPass.connect(mountainHighShelf);
+        mountainHighShelf.connect(mountainGain);
+        mountainGain.connect(destination);
+
+        source.connect(buriedLowPass);
+        buriedLowPass.connect(buriedLowShelf);
+        buriedLowShelf.connect(buriedGain);
+        buriedGain.connect(destination);
+
+        chain = {
+          source,
+          dryGain,
+          caveGain,
+          underwaterGain,
+          mountainGain,
+          buriedGain,
+          caveLowPass,
+          cavePeaking,
+          underwaterLowPass,
+          mountainHighPass,
+          mountainHighShelf,
+          buriedLowPass,
+          buriedLowShelf,
+          destination
+        };
+
+        this.remoteAudioChains.set(peerId, chain);
+      }
+
+      void this.ensureRemoteAudioContextRunning();
+      return chain.destination.stream;
+    } catch (err) {
+      logger.error("EnviroVoice", "Failed to bind remote audio graph", err);
+      return null;
+    }
   }
 
   private applyPeerAudioState(peerId: string): void {
@@ -547,6 +709,45 @@ export class WebRtcService {
     // Force a hard mute when calculated distance volume reaches zero.
     audio.muted = deafened || mutedByDistance;
     audio.volume = volume;
+  }
+
+  private applyPeerEnvironmentEffect(peerId: string): void {
+    const chain = this.remoteAudioChains.get(peerId);
+    if (!chain || !this.remoteAudioContext) {
+      return;
+    }
+
+    const effect = this.environmentEffectState.get(peerId) ?? "none";
+    const now = this.remoteAudioContext.currentTime;
+
+    chain.dryGain.gain.setTargetAtTime(1, now, 0.05);
+    chain.caveGain.gain.setTargetAtTime(0, now, 0.05);
+    chain.underwaterGain.gain.setTargetAtTime(0, now, 0.05);
+    chain.mountainGain.gain.setTargetAtTime(0, now, 0.05);
+    chain.buriedGain.gain.setTargetAtTime(0, now, 0.05);
+
+    if (effect === "cave") {
+      chain.dryGain.gain.setTargetAtTime(0.82, now, 0.05);
+      chain.caveGain.gain.setTargetAtTime(0.48, now, 0.05);
+      return;
+    }
+
+    if (effect === "underwater") {
+      chain.dryGain.gain.setTargetAtTime(0.72, now, 0.05);
+      chain.underwaterGain.gain.setTargetAtTime(0.68, now, 0.05);
+      return;
+    }
+
+    if (effect === "mountain") {
+      chain.dryGain.gain.setTargetAtTime(0.78, now, 0.05);
+      chain.mountainGain.gain.setTargetAtTime(0.55, now, 0.05);
+      return;
+    }
+
+    if (effect === "buried") {
+      chain.dryGain.gain.setTargetAtTime(0.74, now, 0.05);
+      chain.buriedGain.gain.setTargetAtTime(0.7, now, 0.05);
+    }
   }
 
   private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {
@@ -621,6 +822,22 @@ export class WebRtcService {
       await this.localAudioContext.resume();
     } catch (err) {
       logger.error("EnviroVoice", "Failed to resume local audio context", err);
+    }
+  }
+
+  private async ensureRemoteAudioContextRunning(): Promise<void> {
+    if (!this.remoteAudioContext) {
+      return;
+    }
+
+    if (this.remoteAudioContext.state === "running") {
+      return;
+    }
+
+    try {
+      await this.remoteAudioContext.resume();
+    } catch (err) {
+      logger.error("EnviroVoice", "Failed to resume remote audio context", err);
     }
   }
 

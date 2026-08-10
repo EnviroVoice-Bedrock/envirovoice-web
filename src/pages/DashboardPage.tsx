@@ -166,6 +166,12 @@ export const DashboardPage = ({
               users={currentRoom.users}
               currentUserId={userId}
               minecraftPlayers={[]}
+              minecraftEffects={{
+                caveSound: false,
+                underwaterSound: false,
+                mountainSound: false,
+                buriedSound: false
+              }}
               deafenedUsers={deafenedUsers}
               peerVolumes={peerVolumes ?? {}}
               onToggleDeafen={onToggleUserDeafen}

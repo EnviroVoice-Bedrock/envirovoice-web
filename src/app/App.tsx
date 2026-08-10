@@ -19,6 +19,7 @@ export const App = () => {
     voiceStatus,
     localMicLevel,
     minecraftMaxDistance,
+    minecraftEffects,
     availableMicrophones,
     selectedMicrophoneId,
     isSelfMuted,
@@ -193,6 +194,7 @@ export const App = () => {
           minecraftRoomUrl={minecraftRoomUrl}
           minecraftPlayers={minecraftPlayers}
           minecraftMaxDistance={minecraftMaxDistance}
+          minecraftEffects={minecraftEffects}
           localMicLevel={localMicLevel}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
