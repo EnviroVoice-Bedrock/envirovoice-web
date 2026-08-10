@@ -89,6 +89,12 @@ export const ParticipantList = ({ users, currentUserId, minecraftPlayers, minecr
                 {minecraftMuted ? "Muteado en Minecraft" : minecraftDeafened ? "Ensordecido en Minecraft" : `Minecraft vol ${minecraftProfile?.microphoneVolume ?? 100}%`}
               </small>
               {environmentLabel && <small className="participant-minecraft-state">{environmentLabel}</small>}
+              <div className={`participant-voice-indicator ${isVoiceActive ? "participant-voice-indicator-active" : ""}`}>
+                <span className="participant-voice-bar" />
+                <span className="participant-voice-bar" />
+                <span className="participant-voice-bar" />
+                <small>{isVoiceActive ? "Hablando" : "En silencio"}</small>
+              </div>
               {!isSelf && (
                 <div className="participant-volume">
                   <button type="button" className="button-secondary participant-volume-btn" onClick={() => onSetVolume(user.id, volume - 0.2)}>

@@ -949,14 +949,16 @@ export class WebRtcService {
       }
 
       const rms = Math.sqrt(sum / data.length);
-      const speaking = rms > this.speakingThreshold;
-      const level = Math.min(1, rms * 12);
+      const speakingOnThreshold = this.speakingThreshold;
+      const speakingOffThreshold = this.speakingThreshold * 0.68;
+      const speaking = this.lastSpeakingState ? rms > speakingOffThreshold : rms > speakingOnThreshold;
+      const level = Math.min(1, rms * 18);
 
       if (this.localNoiseGateGain) {
         if (this.noiseSuppressionEnabled) {
-          const gateThreshold = this.speakingThreshold * 0.72;
-          const target = rms > gateThreshold ? 1 : 0.18;
-          const smoothing = target > this.localNoiseGateGain.gain.value ? 0.018 : 0.08;
+          const gateThreshold = this.speakingThreshold * 0.42;
+          const target = rms > gateThreshold ? 1 : 0.6;
+          const smoothing = target > this.localNoiseGateGain.gain.value ? 0.012 : 0.06;
           this.localNoiseGateGain.gain.setTargetAtTime(target, this.localAudioContext.currentTime, smoothing);
         } else {
           this.localNoiseGateGain.gain.setTargetAtTime(1, this.localAudioContext.currentTime, 0.03);
@@ -969,7 +971,7 @@ export class WebRtcService {
         this.lastSpeakingState = speaking;
         this.options.onLocalSpeaking?.(speaking);
       }
-    }, 250);
+    }, 120);
 
     return this.localProcessedDestination.stream;
   }

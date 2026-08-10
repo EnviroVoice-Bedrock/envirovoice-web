@@ -163,6 +163,11 @@ const isAppleMobileBrowser = (): boolean => {
   return isIOS && isWebKit && !isCriOS && !isFxiOS;
 };
 
+const toSpeakingThreshold = (sensitivity: number): number => {
+  const safeSensitivity = Math.max(1, Math.min(100, Math.round(sensitivity)));
+  return 0.012 + ((100 - safeSensitivity) / 100) * 0.05;
+};
+
 const resolveEnvironmentEffect = (
   player: MinecraftPlayerPosition,
   effects: AppState["minecraftEffects"]
@@ -476,7 +481,7 @@ export const useAppStore = create<AppState>((set, get) => {
     peerStates: {},
     isSelfMuted: false,
     isSelfDeafened: false,
-    micSensitivity: 40,
+    micSensitivity: 70,
     localMicLevel: 0,
     monitorSelfVoice: false,
     minecraftMaxDistance: 50,
@@ -707,7 +712,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     setMicSensitivity: (value) => {
       const safeValue = Math.max(1, Math.min(100, Math.round(value)));
-      const threshold = 0.02 + ((100 - safeValue) / 100) * 0.1;
+      const threshold = toSpeakingThreshold(safeValue);
       webrtc.setSpeakingThreshold(threshold);
       set({ micSensitivity: safeValue });
     },
@@ -816,7 +821,7 @@ export const useAppStore = create<AppState>((set, get) => {
       webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
       webrtc.configureInput(selectedMicrophoneId);
       webrtc.setSelfMonitor(monitorSelfVoice);
-      webrtc.setSpeakingThreshold(0.02 + ((100 - micSensitivity) / 100) * 0.1);
+      webrtc.setSpeakingThreshold(toSpeakingThreshold(micSensitivity));
       set({ voiceStatus: "requesting" });
 
       try {
@@ -875,7 +880,7 @@ export const useAppStore = create<AppState>((set, get) => {
         peerStates: {},
         isSelfMuted: false,
         isSelfDeafened: false,
-        micSensitivity: 40,
+        micSensitivity: 70,
         localMicLevel: 0,
         monitorSelfVoice: false,
         debugPeerInfo: {},
@@ -957,7 +962,7 @@ export const useAppStore = create<AppState>((set, get) => {
         peerStates: {},
         isSelfMuted: false,
         isSelfDeafened: false,
-        micSensitivity: 40,
+        micSensitivity: 70,
         localMicLevel: 0,
         monitorSelfVoice: false,
         debugPeerInfo: {},
@@ -1001,7 +1006,7 @@ export const useAppStore = create<AppState>((set, get) => {
         peerStates: {},
         isSelfMuted: false,
         isSelfDeafened: false,
-        micSensitivity: 40,
+        micSensitivity: 70,
         localMicLevel: 0,
         monitorSelfVoice: false,
         selectedMicrophoneId: null,
