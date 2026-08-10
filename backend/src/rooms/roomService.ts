@@ -11,6 +11,7 @@ const defaultPosition = {
 
 export class RoomService {
   private readonly rooms = new Map<string, Room>();
+  private static readonly DUPLICATE_USER_NAME_ERROR = "Username already connected";
 
   private static normalizeRoomName(name: string): string {
     return name.trim().toLowerCase();
@@ -44,14 +45,7 @@ export class RoomService {
     const normalizedName = RoomService.normalizeUserName(userName);
     const byNameIndex = room.users.findIndex((user) => RoomService.normalizeUserName(user.name) === normalizedName);
     if (byNameIndex !== -1) {
-      room.users[byNameIndex] = {
-        id: userId,
-        name: userName,
-        muted: false,
-        speaking: false,
-        position: defaultPosition
-      };
-      return;
+      throw new Error(RoomService.DUPLICATE_USER_NAME_ERROR);
     }
 
     if (room.users.length >= room.maxUsers) {

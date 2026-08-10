@@ -26,11 +26,12 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
     window.clearTimeout(timeout);
   }
 
+  const parsed = (await response.json()) as ApiResponse<T>;
+
   if (!response.ok) {
-    throw new Error(`API request failed (${response.status})`);
+    throw new Error(parsed.message || `API request failed (${response.status})`);
   }
 
-  const parsed = (await response.json()) as ApiResponse<T>;
   return parsed.data;
 };
 

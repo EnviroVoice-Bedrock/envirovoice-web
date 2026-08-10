@@ -52,7 +52,8 @@ roomsRouter.post("/rooms/:roomId/join", (req, res) => {
     res.json({ success: true, data: room });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to join room";
-    res.status(message === "Room full" ? 409 : 404).json({ success: false, message });
+    const status = message === "Room full" || message === "Username already connected" ? 409 : 404;
+    res.status(status).json({ success: false, message });
   }
 });
 

@@ -65,6 +65,7 @@ type AppState = {
   createRoom: (name: string) => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
   startVoice: () => Promise<void>;
+  reconcileVoicePeers: () => Promise<void>;
   refreshMicrophones: () => Promise<void>;
   refreshDiagnostics: () => void;
   applyMinecraftPlayerPositions: (players: MinecraftPlayerPosition[]) => void;
@@ -860,6 +861,18 @@ export const useAppStore = create<AppState>((set, get) => {
 
         set({ voiceStatus: "failed", errorMessage: "No microphone" });
       }
+    },
+
+    reconcileVoicePeers: async () => {
+      const { session, currentRoom, voiceStatus, isSelfMuted } = get();
+      if (!session || !currentRoom || voiceStatus !== "ready") {
+        return;
+      }
+
+      webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
+      webrtc.setMicrophoneEnabled(!isSelfMuted);
+      await webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
+      applyVoiceMix();
     },
 
     leaveRoom: async () => {

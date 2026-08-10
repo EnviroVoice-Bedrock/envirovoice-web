@@ -31,6 +31,7 @@ export const App = () => {
     initialize,
     connectToRoomByName,
     startVoice,
+    reconcileVoicePeers,
     refreshMicrophones,
     setMicrophone,
     setPeerVolume,
@@ -175,6 +176,29 @@ export const App = () => {
       window.clearInterval(timer);
     };
   }, [session, currentRoom, deafenedUsers, firebaseBaseUri]);
+
+  useEffect(() => {
+    if (!session || !currentRoom || voiceStatus !== "ready") {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void reconcileVoicePeers();
+    }, 3000);
+
+    const handleFocus = (): void => {
+      void reconcileVoicePeers();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [session, currentRoom, voiceStatus, reconcileVoicePeers]);
 
   return (
     <MainLayout>
