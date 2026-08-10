@@ -8,23 +8,8 @@ import { useState } from "react";
 type Props = {
   room: Room;
   userId: string;
-  connectionStatus: "connecting" | "connected" | "disconnected" | "reconnecting";
-  peerStates: Record<string, RTCPeerConnectionState>;
-  debugPeerInfo: Record<
-    string,
-    {
-      connectionState: RTCPeerConnectionState | "closed";
-      signalingState: RTCSignalingState | "closed";
-      audioSenders: number;
-      audioReceivers: number;
-    }
-  >;
-  debugLastPlaybackError: string | null;
-  voiceMode: "call" | "minecraft";
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
-  micSensitivity: number;
-  monitorSelfVoice: boolean;
   availableMicrophones: Array<{ id: string; label: string }>;
   selectedMicrophoneId: string | null;
   selfMuted: boolean;
@@ -33,11 +18,8 @@ type Props = {
   peerVolumes: Record<string, number>;
   onRefreshMicrophones: () => Promise<void>;
   onSetMicrophone: (deviceId: string | null) => Promise<void>;
-  onSetMicSensitivity: (value: number) => void;
-  onSetMonitorSelfVoice: (enabled: boolean) => void;
   onSetPeerVolume: (userId: string, volume: number) => void;
   onStartVoice: () => Promise<void>;
-  onSetVoiceMode: (mode: "call" | "minecraft") => void;
   onToggleSelfMute: () => void;
   onToggleSelfDeafen: () => void;
   onToggleUserDeafen: (userId: string) => void;
@@ -54,15 +36,8 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
 export const RoomPage = ({
   room,
   userId,
-  connectionStatus,
-  peerStates,
-  debugPeerInfo,
-  debugLastPlaybackError,
-  voiceMode,
   voiceStatus,
   localMicLevel,
-  micSensitivity,
-  monitorSelfVoice,
   availableMicrophones,
   selectedMicrophoneId,
   selfMuted,
@@ -71,11 +46,8 @@ export const RoomPage = ({
   peerVolumes,
   onRefreshMicrophones,
   onSetMicrophone,
-  onSetMicSensitivity,
-  onSetMonitorSelfVoice,
   onSetPeerVolume,
   onStartVoice,
-  onSetVoiceMode,
   onToggleSelfMute,
   onToggleSelfDeafen,
   onToggleUserDeafen,
@@ -96,8 +68,6 @@ export const RoomPage = ({
     });
 
   const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : room.users;
-  const debugPeerEntries = Object.entries(debugPeerInfo);
-
   const micStatusText =
     voiceStatus === "ready"
       ? "Voz activa"
@@ -152,19 +122,6 @@ export const RoomPage = ({
             </div>
           </div>
 
-          <div className="voice-mode-toggle" role="group" aria-label="Modo de voz">
-            <button type="button" className={`button-secondary ${voiceMode === "call" ? "mode-active" : ""}`} onClick={() => onSetVoiceMode("call")}>
-              Modo llamada
-            </button>
-            <button
-              type="button"
-              className={`button-secondary ${voiceMode === "minecraft" ? "mode-active" : ""}`}
-              onClick={() => onSetVoiceMode("minecraft")}
-            >
-              Modo Minecraft
-            </button>
-          </div>
-
           <div className="voice-controls-grid">
             <label htmlFor="microphone-select">Microfono</label>
             <div className="voice-inline-row">
@@ -181,21 +138,6 @@ export const RoomPage = ({
               </button>
             </div>
 
-            <label htmlFor="sensitivity-range">Sensibilidad: {micSensitivity}%</label>
-            <input
-              id="sensitivity-range"
-              type="range"
-              min={1}
-              max={100}
-              value={micSensitivity}
-              onChange={(event) => onSetMicSensitivity(Number(event.target.value))}
-            />
-
-            <label htmlFor="self-monitor" className="checkbox-row">
-              <input id="self-monitor" type="checkbox" checked={monitorSelfVoice} onChange={(event) => onSetMonitorSelfVoice(event.target.checked)} />
-              Monitor local
-            </label>
-
             <div>
               <small>Nivel de entrada</small>
               <div className="mic-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(localMicLevel * 100)}>
@@ -206,28 +148,6 @@ export const RoomPage = ({
             <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
               {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
             </button>
-
-            <div className="voice-debug-panel">
-              <small className="section-kicker">DEBUG VOICE</small>
-              <small>Signaling: {connectionStatus}</small>
-              <small>Peers activos: {Object.keys(peerStates).length}</small>
-              {debugLastPlaybackError && <small>audio.play: {debugLastPlaybackError}</small>}
-
-              {debugPeerEntries.length > 0 ? (
-                <ul className="voice-debug-list">
-                  {debugPeerEntries.map(([peerId, info]) => (
-                    <li key={peerId}>
-                      <strong>{peerId.slice(0, 8)}</strong>
-                      <small>
-                        conn: {info.connectionState} | signal: {info.signalingState} | tx: {info.audioSenders} | rx: {info.audioReceivers}
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <small>Sin peers conectados aun.</small>
-              )}
-            </div>
           </div>
         </aside>
       )}

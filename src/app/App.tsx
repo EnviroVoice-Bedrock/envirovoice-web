@@ -41,32 +41,21 @@ export const App = () => {
   const {
     session,
     currentRoom,
-    connectionStatus,
-    peerStates,
-    voiceMode,
     voiceStatus,
     localMicLevel,
-    micSensitivity,
-    monitorSelfVoice,
     availableMicrophones,
     selectedMicrophoneId,
-    debugPeerInfo,
-    debugLastPlaybackError,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
     peerVolumes,
     errorMessage,
     setSession,
-    setVoiceMode,
     initialize,
     connectToRoomByName,
     startVoice,
     refreshMicrophones,
-    refreshDiagnostics,
     setMicrophone,
-    setMicSensitivity,
-    setMonitorSelfVoice,
     setPeerVolume,
     setSelfMuted,
     setSelfDeafened,
@@ -98,6 +87,14 @@ export const App = () => {
 
     void connectToRoomByName(targetRoomName);
   }, [session, currentRoom, targetRoomName, connectToRoomByName]);
+
+  useEffect(() => {
+    if (!session || !currentRoom || voiceStatus !== "idle") {
+      return;
+    }
+
+    void startVoice();
+  }, [session, currentRoom, voiceStatus, startVoice]);
 
   useEffect(() => {
     if (!session || !currentRoom) {
@@ -136,21 +133,6 @@ export const App = () => {
     };
   }, [session, currentRoom, deafenedUsers]);
 
-  useEffect(() => {
-    if (!session || !currentRoom) {
-      return;
-    }
-
-    refreshDiagnostics();
-    const timer = window.setInterval(() => {
-      refreshDiagnostics();
-    }, 1000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [session, currentRoom, refreshDiagnostics]);
-
   return (
     <MainLayout>
       {errorMessage && (
@@ -165,28 +147,18 @@ export const App = () => {
         <RoomPage
           room={currentRoom}
           userId={session.id}
-          voiceMode={voiceMode}
           voiceStatus={voiceStatus}
           localMicLevel={localMicLevel}
-          micSensitivity={micSensitivity}
-          monitorSelfVoice={monitorSelfVoice}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
-          connectionStatus={connectionStatus}
-          peerStates={peerStates}
-          debugPeerInfo={debugPeerInfo}
-          debugLastPlaybackError={debugLastPlaybackError}
           selfMuted={isSelfMuted}
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
           peerVolumes={peerVolumes}
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
-          onSetMicSensitivity={setMicSensitivity}
-          onSetMonitorSelfVoice={setMonitorSelfVoice}
           onSetPeerVolume={setPeerVolume}
           onStartVoice={startVoice}
-          onSetVoiceMode={setVoiceMode}
           onToggleSelfMute={() => setSelfMuted(!isSelfMuted)}
           onToggleSelfDeafen={() => setSelfDeafened(!isSelfDeafened)}
           onToggleUserDeafen={toggleUserDeafen}
