@@ -39,6 +39,11 @@ export type MinecraftPlayerPosition = {
   dimension: "overworld" | "nether" | "end";
 };
 
+export type MinecraftWorldState = {
+  players: MinecraftPlayerPosition[];
+  maxDistance: number;
+};
+
 const REQUEST_TIMEOUT_MS = 5000;
 
 const normalizeName = (name: string): string => name.trim().toLowerCase();
@@ -128,7 +133,12 @@ const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPo
   }
 
   const candidate = value as Record<string, unknown>;
-  const positionBlock = candidate.position && typeof candidate.position === "object" ? (candidate.position as Record<string, unknown>) : candidate;
+  let positionBlock: Record<string, unknown> = candidate;
+  if (candidate.location && typeof candidate.location === "object") {
+    positionBlock = candidate.location as Record<string, unknown>;
+  } else if (candidate.position && typeof candidate.position === "object") {
+    positionBlock = candidate.position as Record<string, unknown>;
+  }
 
   const x = toNumber(positionBlock.x ?? positionBlock.posX ?? positionBlock.locationX);
   const y = toNumber(positionBlock.y ?? positionBlock.posY ?? positionBlock.locationY);
@@ -251,9 +261,35 @@ const fetchMinecraftSnapshot = async (baseUri?: string): Promise<MinecraftSnapsh
   }
 };
 
+const extractMaxDistance = (snapshot: MinecraftSnapshot): number => {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return 50;
+  }
+
+  const server = (snapshot as Record<string, unknown>).server;
+  if (!server || typeof server !== "object") {
+    return 50;
+  }
+
+  const value = toNumber((server as Record<string, unknown>).maxDistance);
+  if (value == null || value <= 0) {
+    return 50;
+  }
+
+  return Math.max(1, Math.min(300, value));
+};
+
 export const fetchMinecraftPlayerPositions = async (options?: { baseUri?: string }): Promise<MinecraftPlayerPosition[]> => {
   const snapshot = await fetchMinecraftSnapshot(options?.baseUri);
   return collectPlayerPositions(snapshot);
+};
+
+export const fetchMinecraftWorldState = async (options?: { baseUri?: string }): Promise<MinecraftWorldState> => {
+  const snapshot = await fetchMinecraftSnapshot(options?.baseUri);
+  return {
+    players: collectPlayerPositions(snapshot),
+    maxDistance: extractMaxDistance(snapshot)
+  };
 };
 
 const putVoiceSyncPayload = async (payload: {

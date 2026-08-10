@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { MainLayout } from "../layouts/MainLayout";
 import { LoginPage } from "../pages/LoginPage";
 import { RoomPage } from "../pages/RoomPage";
-import { fetchMinecraftPlayerPositions, syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
+import { fetchMinecraftWorldState, syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
 import { useAppStore } from "../stores/useAppStore";
 
 const DEFAULT_ROOM = "minecraft-global";
@@ -58,7 +58,7 @@ export const App = () => {
     refreshMicrophones,
     setMicrophone,
     setPeerVolume,
-    applyMinecraftPlayerPositions,
+    applyMinecraftWorldState,
     setSelfMuted,
     setSelfDeafened,
     toggleUserDeafen,
@@ -109,9 +109,9 @@ export const App = () => {
 
     const pollMinecraft = async (): Promise<void> => {
       try {
-        const players = await fetchMinecraftPlayerPositions({ baseUri: firebaseBaseUri });
+        const worldState = await fetchMinecraftWorldState({ baseUri: firebaseBaseUri });
         if (!cancelled) {
-          applyMinecraftPlayerPositions(players);
+          applyMinecraftWorldState(worldState);
         }
       } catch {
         // Ignore transient polling errors to avoid spamming user-facing alerts.
@@ -127,7 +127,7 @@ export const App = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [session, currentRoom, firebaseBaseUri, applyMinecraftPlayerPositions]);
+  }, [session, currentRoom, firebaseBaseUri, applyMinecraftWorldState]);
 
   useEffect(() => {
     if (!session || !currentRoom) {

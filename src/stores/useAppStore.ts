@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { apiClient } from "../services/api/client";
-import type { MinecraftPlayerPosition } from "../services/api/firebaseVoiceSync";
+import type { MinecraftPlayerPosition, MinecraftWorldState } from "../services/api/firebaseVoiceSync";
 import { SignalingClient } from "../services/signaling/signalingClient";
 import { WebRtcService } from "../services/webrtc/webrtcService";
 import type { Room, RoomUser } from "../types/room";
@@ -39,6 +39,7 @@ type AppState = {
   micSensitivity: number;
   localMicLevel: number;
   monitorSelfVoice: boolean;
+  minecraftMaxDistance: number;
   availableMicrophones: MicrophoneOption[];
   selectedMicrophoneId: string | null;
   debugPeerInfo: Record<string, PeerDebugInfo>;
@@ -58,6 +59,7 @@ type AppState = {
   refreshMicrophones: () => Promise<void>;
   refreshDiagnostics: () => void;
   applyMinecraftPlayerPositions: (players: MinecraftPlayerPosition[]) => void;
+  applyMinecraftWorldState: (worldState: MinecraftWorldState) => void;
   setMicrophone: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
   setMonitorSelfVoice: (enabled: boolean) => void;
@@ -102,7 +104,7 @@ const hasMinecraftPosition = (user: RoomUser): boolean => {
 
 const normalizeUserName = (name: string): string => name.trim().toLowerCase();
 
-const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser): number => {
+const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDistance: number): number => {
   if (!hasMinecraftPosition(selfUser) || !hasMinecraftPosition(otherUser)) {
     return 0;
   }
@@ -115,13 +117,13 @@ const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser): number
   const dy = selfUser.position.y - otherUser.position.y;
   const dz = selfUser.position.z - otherUser.position.z;
   const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  const maxDistance = 80;
+  const safeMaxDistance = Math.max(1, Math.min(300, maxDistance));
 
-  if (distance >= maxDistance) {
+  if (distance >= safeMaxDistance) {
     return 0;
   }
 
-  return Math.max(0, Math.min(1, 1 - distance / maxDistance));
+  return Math.max(0, Math.min(1, 1 - distance / safeMaxDistance));
 };
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -252,7 +254,7 @@ export const useAppStore = create<AppState>((set, get) => {
   });
 
   const applyVoiceMix = (): void => {
-    const { currentRoom, session, voiceMode, isSelfDeafened, deafenedUsers, peerVolumes } = get();
+    const { currentRoom, session, minecraftMaxDistance, isSelfDeafened, deafenedUsers, peerVolumes } = get();
     if (!currentRoom || !session) {
       return;
     }
@@ -268,7 +270,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
 
       const manuallyDeafened = Boolean(deafenedUsers[user.id]) || isSelfDeafened;
-      const baseVolume = voiceMode === "call" ? 1 : computeMinecraftVolume(selfUser, user);
+      const baseVolume = computeMinecraftVolume(selfUser, user, minecraftMaxDistance);
       const personalVolume = peerVolumes[user.id] ?? 1;
       const volume = Math.max(0, Math.min(1, baseVolume * personalVolume));
 
@@ -362,7 +364,7 @@ export const useAppStore = create<AppState>((set, get) => {
     session: null,
     rooms: [],
     currentRoom: null,
-    voiceMode: "call",
+    voiceMode: "minecraft",
     connectionStatus: "disconnected",
     voiceStatus: "idle",
     peerStates: {},
@@ -371,6 +373,7 @@ export const useAppStore = create<AppState>((set, get) => {
     micSensitivity: 40,
     localMicLevel: 0,
     monitorSelfVoice: false,
+    minecraftMaxDistance: 50,
     availableMicrophones: [],
     selectedMicrophoneId: null,
     debugPeerInfo: {},
@@ -518,6 +521,12 @@ export const useAppStore = create<AppState>((set, get) => {
       applyVoiceMix();
     },
 
+    applyMinecraftWorldState: (worldState) => {
+      set({ minecraftMaxDistance: worldState.maxDistance });
+      get().applyMinecraftPlayerPositions(worldState.players);
+      applyVoiceMix();
+    },
+
     setMicrophone: async (deviceId) => {
       const nextId = deviceId || null;
       webrtc.configureInput(nextId);
@@ -657,17 +666,10 @@ export const useAppStore = create<AppState>((set, get) => {
         await webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
         applyVoiceMix();
 
-        const { voiceMode } = get();
-        if (voiceMode === "minecraft") {
-          const selfUser = currentRoom.users.find((user) => user.id === session.id);
-          const hasData = Boolean(selfUser && hasMinecraftPosition(selfUser));
-          if (!hasData) {
-            set({
-              voiceMode: "call",
-              errorMessage: "Sin datos del addon: se activo modo llamada para que puedas escuchar voz"
-            });
-            applyVoiceMix();
-          }
+        const selfUser = currentRoom.users.find((user) => user.id === session.id);
+        const hasData = Boolean(selfUser && hasMinecraftPosition(selfUser));
+        if (!hasData) {
+          set({ errorMessage: "Esperando coordenadas de Minecraft para activar voz por proximidad" });
         }
       } catch (err) {
         logger.error("EnviroVoice", "Microphone setup failed", err);
@@ -700,7 +702,7 @@ export const useAppStore = create<AppState>((set, get) => {
       // Clear local state first so UI never remains stuck if network is slow.
       set({
         currentRoom: null,
-        voiceMode: "call",
+        voiceMode: "minecraft",
         voiceStatus: "idle",
         peerStates: {},
         isSelfMuted: false,
@@ -781,7 +783,7 @@ export const useAppStore = create<AppState>((set, get) => {
         session: null,
         rooms: [],
         currentRoom: null,
-        voiceMode: "call",
+        voiceMode: "minecraft",
         connectionStatus: "disconnected",
         voiceStatus: "idle",
         peerStates: {},
@@ -825,7 +827,7 @@ export const useAppStore = create<AppState>((set, get) => {
         session: null,
         rooms: [],
         currentRoom: null,
-        voiceMode: "call",
+        voiceMode: "minecraft",
         connectionStatus: "disconnected",
         voiceStatus: "idle",
         peerStates: {},
