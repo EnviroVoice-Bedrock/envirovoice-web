@@ -36,6 +36,8 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
   return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
 };
 
+const clampVolume = (value: number): number => Math.max(0, Math.min(1, value));
+
 const hasMinecraftPosition = (user: Room["users"][number]): boolean => {
   const p = user.position;
   return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
@@ -71,7 +73,7 @@ export const RoomPage = ({
   onLeave
 }: Props) => {
   const [showVoiceSettings, setShowVoiceSettings] = useState(true);
-  const safeMaxDistance = Math.max(1, Math.min(300, minecraftMaxDistance));
+  const safeMaxDistance = Math.max(1, Math.min(50, Math.max(1, Math.min(300, minecraftMaxDistance))));
   const selfUser = room.users.find((user) => user.id === userId);
   const nearbyUsers = room.users
     .filter((user) => user.id !== userId)
@@ -86,15 +88,27 @@ export const RoomPage = ({
     });
 
   const usersWithDistance = nearbyUsers.map((user) => {
+    const personalVolume = clampVolume(peerVolumes[user.id] ?? 1);
+    const manuallyDeafened = Boolean(deafenedUsers[user.id]) || selfDeafened;
+
     if (!selfUser || !hasMinecraftPosition(selfUser) || !hasMinecraftPosition(user)) {
-      return { user, distance: null as number | null, isNear: false, sameDimension: false, hasPosition: hasMinecraftPosition(user) };
+      return {
+        user,
+        distance: null as number | null,
+        isNear: false,
+        sameDimension: false,
+        hasPosition: hasMinecraftPosition(user),
+        finalVolume: 0
+      };
     }
 
     const sameDimension = selfUser.position.dimension === user.position.dimension;
     const distance = getDistance(selfUser.position.x, selfUser.position.y, selfUser.position.z, user.position.x, user.position.y, user.position.z);
     const isNear = sameDimension && distance <= safeMaxDistance;
+    const baseVolume = isNear ? clampVolume(1 - distance / safeMaxDistance) : 0;
+    const finalVolume = manuallyDeafened ? 0 : clampVolume(baseVolume * personalVolume);
 
-    return { user, distance, isNear, sameDimension, hasPosition: true };
+    return { user, distance, isNear, sameDimension, hasPosition: true, finalVolume };
   });
 
   const closeUsers = usersWithDistance.filter((item) => item.isNear);
@@ -142,11 +156,12 @@ export const RoomPage = ({
 
           {closeUsers.length > 0 && (
             <ul className="nearby-users-list">
-              {closeUsers.map(({ user, distance }) => (
+              {closeUsers.map(({ user, distance, finalVolume }) => (
                 <li key={`near-${user.id}`}>
                   <div className="nearby-user-meta">
                     <strong>{user.name}</strong>
                     <small>{getPositionLabel(user)}</small>
+                    <small>Volumen aplicado: {Math.round(finalVolume * 100)}%</small>
                   </div>
                   <span>{distance ?? "--"} bloques</span>
                 </li>
@@ -158,11 +173,12 @@ export const RoomPage = ({
             <details className="nearby-users-far">
               <summary>Fuera de rango o dimension distinta ({farUsers.length})</summary>
               <ul className="nearby-users-list nearby-users-list-far">
-                {farUsers.map(({ user, distance, sameDimension }) => (
+                {farUsers.map(({ user, distance, sameDimension, finalVolume }) => (
                   <li key={`far-${user.id}`}>
                     <div className="nearby-user-meta">
                       <strong>{user.name}</strong>
                       <small>{getPositionLabel(user)}</small>
+                      <small>Volumen aplicado: {Math.round(finalVolume * 100)}%</small>
                     </div>
                     <span>{sameDimension ? `${distance ?? "--"} bloques` : "Dimension distinta"}</span>
                   </li>
@@ -175,11 +191,12 @@ export const RoomPage = ({
             <details className="nearby-users-far">
               <summary>Sin datos de Minecraft ({usersWithoutData.length})</summary>
               <ul className="nearby-users-list nearby-users-list-far">
-                {usersWithoutData.map(({ user }) => (
+                {usersWithoutData.map(({ user, finalVolume }) => (
                   <li key={`missing-${user.id}`}>
                     <div className="nearby-user-meta">
                       <strong>{user.name}</strong>
                       <small>{getPositionLabel(user)}</small>
+                      <small>Volumen aplicado: {Math.round(finalVolume * 100)}%</small>
                     </div>
                     <span>Esperando snapshot</span>
                   </li>

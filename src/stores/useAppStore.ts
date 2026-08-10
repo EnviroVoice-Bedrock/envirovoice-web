@@ -139,6 +139,8 @@ const normalizeUserName = (name: string): string =>
     .replace(/§[0-9a-fk-or]/gi, "")
     .replace(/[^a-z0-9_-]/g, "");
 
+const PROXIMITY_MAX_DISTANCE = 50;
+
 const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDistance: number): number => {
   if (!hasMinecraftPosition(selfUser) || !hasMinecraftPosition(otherUser)) {
     return 0;
@@ -152,7 +154,7 @@ const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDist
   const dy = selfUser.position.y - otherUser.position.y;
   const dz = selfUser.position.z - otherUser.position.z;
   const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  const safeMaxDistance = Math.max(1, Math.min(300, maxDistance));
+  const safeMaxDistance = Math.max(1, Math.min(PROXIMITY_MAX_DISTANCE, Math.max(1, Math.min(300, maxDistance))));
 
   if (distance >= safeMaxDistance) {
     return 0;
