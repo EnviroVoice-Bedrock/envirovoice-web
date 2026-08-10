@@ -37,6 +37,9 @@ export type MinecraftPlayerPosition = {
   y: number;
   z: number;
   dimension: "overworld" | "nether" | "end";
+  isMuted?: boolean;
+  isDeafen?: boolean;
+  microphoneVolume?: number;
 };
 
 export type MinecraftWorldState = {
@@ -77,6 +80,25 @@ const toNumber = (value: unknown): number | null => {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) {
       return parsed;
+    }
+  }
+
+  return null;
+};
+
+const toBoolean = (value: unknown): boolean | null => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const text = value.trim().toLowerCase();
+    if (text === "true") {
+      return true;
+    }
+
+    if (text === "false") {
+      return false;
     }
   }
 
@@ -159,7 +181,20 @@ const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPo
 
   const dimension = normalizeDimension(positionBlock.dimension ?? positionBlock.dim ?? candidate.dimension ?? candidate.world);
 
-  return { name, x, y, z, dimension };
+  const microphoneVolume = toNumber(candidate.microphoneVolume);
+  const isMuted = toBoolean(candidate.isMuted);
+  const isDeafen = toBoolean(candidate.isDeafen);
+
+  return {
+    name,
+    x,
+    y,
+    z,
+    dimension,
+    microphoneVolume: microphoneVolume == null ? undefined : microphoneVolume,
+    isMuted: isMuted ?? undefined,
+    isDeafen: isDeafen ?? undefined
+  };
 };
 
 const collectPlayerPositions = (snapshot: MinecraftSnapshot): MinecraftPlayerPosition[] => {

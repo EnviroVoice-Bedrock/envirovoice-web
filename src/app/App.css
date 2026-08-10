@@ -891,6 +891,12 @@ input[type="range"] {
   gap: 4px;
 }
 
+.participant-minecraft-state {
+  color: #89acc5;
+  font-size: 0.78rem;
+  line-height: 1.1;
+}
+
 .participant-info span {
   color: var(--text-muted);
   font-size: 0.92rem;

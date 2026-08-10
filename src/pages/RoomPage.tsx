@@ -198,6 +198,7 @@ export const RoomPage = ({
           <ParticipantList
             users={visibleUsers}
             currentUserId={userId}
+            minecraftPlayers={minecraftPlayers}
             deafenedUsers={deafenedUsers}
             peerVolumes={peerVolumes}
             onToggleDeafen={onToggleUserDeafen}

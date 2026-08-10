@@ -43,6 +43,8 @@ export const App = () => {
     clearError
   } = useAppStore();
 
+  const normalizeName = (name: string): string => name.trim().toLowerCase();
+
   const handleLogin = async (name: string, serverUrl: string): Promise<void> => {
     const isResetCommand = name.trim().toLowerCase() === "!reset" || serverUrl.trim().toLowerCase() === "!reset";
     if (isResetCommand) {
@@ -97,6 +99,31 @@ export const App = () => {
           }
           applyMinecraftWorldState(worldState);
 
+          const selfPlayer = worldState.players.find((player) => normalizeName(player.name) === normalizeName(session.name));
+          if (selfPlayer) {
+            if (typeof selfPlayer.isMuted === "boolean" && selfPlayer.isMuted !== isSelfMuted) {
+              setSelfMuted(selfPlayer.isMuted || (selfPlayer.microphoneVolume ?? 100) === 0);
+            }
+
+            if (typeof selfPlayer.isDeafen === "boolean" && selfPlayer.isDeafen !== isSelfDeafened) {
+              setSelfDeafened(selfPlayer.isDeafen);
+            }
+          }
+
+          if (currentRoom) {
+            for (const player of worldState.players) {
+              const matchedUser = currentRoom.users.find((user) => normalizeName(user.name) === normalizeName(player.name));
+              if (!matchedUser || matchedUser.id === session.id) {
+                continue;
+              }
+
+              if (typeof player.microphoneVolume === "number") {
+                const nextVolume = Math.max(0, Math.min(1, player.microphoneVolume / 100));
+                setPeerVolume(matchedUser.id, nextVolume);
+              }
+            }
+          }
+
           if (errorMessage?.includes("Esperando coordenadas de Minecraft")) {
             const normalizedSelfName = session?.name.trim().toLowerCase() ?? "";
             const hasSelfPosition = worldState.players.some((player) => player.name.trim().toLowerCase() === normalizedSelfName);
@@ -119,7 +146,7 @@ export const App = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [session, firebaseBaseUri, applyMinecraftWorldState, errorMessage, clearError]);
+  }, [session, firebaseBaseUri, currentRoom, applyMinecraftWorldState, errorMessage, clearError, isSelfMuted, isSelfDeafened, setPeerVolume, setSelfMuted, setSelfDeafened]);
 
   useEffect(() => {
     if (!session || !currentRoom) {

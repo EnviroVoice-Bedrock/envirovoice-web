@@ -165,6 +165,7 @@ export const DashboardPage = ({
             <ParticipantList
               users={currentRoom.users}
               currentUserId={userId}
+              minecraftPlayers={[]}
               deafenedUsers={deafenedUsers}
               peerVolumes={peerVolumes ?? {}}
               onToggleDeafen={onToggleUserDeafen}
