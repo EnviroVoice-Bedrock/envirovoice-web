@@ -48,7 +48,7 @@ export type MinecraftWorldState = {
   roomUrl: string;
 };
 
-const REQUEST_TIMEOUT_MS = 5000;
+const REQUEST_TIMEOUT_MS = 1500;
 
 const normalizeName = (name: string): string => name.trim().toLowerCase();
 
@@ -112,6 +112,11 @@ const ensureJsonUrl = (url: string): string => {
   }
 
   return trimmed.endsWith(".json") ? trimmed : `${trimmed}.json`;
+};
+
+const withCacheBuster = (url: string): string => {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}_t=${Date.now()}`;
 };
 
 const normalizeBaseUri = (baseUri?: string): string => {
@@ -276,7 +281,8 @@ const collectPlayerNames = (snapshot: MinecraftSnapshot): string[] => {
 };
 
 const fetchMinecraftSnapshot = async (baseUri?: string): Promise<MinecraftSnapshot> => {
-  const url = baseUri?.trim() ? buildFirebaseJsonUrl(baseUri, "minecraft") : ensureJsonUrl(env.minecraftDataUrl);
+  const sourceUrl = baseUri?.trim() ? buildFirebaseJsonUrl(baseUri, "minecraft") : ensureJsonUrl(env.minecraftDataUrl);
+  const url = withCacheBuster(sourceUrl);
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -284,7 +290,11 @@ const fetchMinecraftSnapshot = async (baseUri?: string): Promise<MinecraftSnapsh
     const response = await fetch(url, {
       method: "GET",
       signal: controller.signal,
-      cache: "no-store"
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache, no-store, max-age=0",
+        Pragma: "no-cache"
+      }
     });
 
     if (!response.ok) {
