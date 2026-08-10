@@ -98,14 +98,6 @@ export const App = () => {
   }, [session, currentRoom, targetRoomName, connectToRoomByName]);
 
   useEffect(() => {
-    if (!session || !currentRoom || ["ready", "requesting", "denied", "unavailable", "failed"].includes(voiceStatus)) {
-      return;
-    }
-
-    void startVoice();
-  }, [session, currentRoom, voiceStatus, startVoice]);
-
-  useEffect(() => {
     if (!session || !currentRoom) {
       return;
     }
