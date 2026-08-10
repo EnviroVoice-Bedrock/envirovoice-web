@@ -5,9 +5,12 @@ import { RoomPage } from "../pages/RoomPage";
 import { fetchMinecraftWorldState, syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
 import { useAppStore } from "../stores/useAppStore";
 
+const DEFAULT_ROOM = "minecraft-global";
+
 export const App = () => {
   const [firebaseBaseUri, setFirebaseBaseUri] = useState("");
   const [minecraftRoomUrl, setMinecraftRoomUrl] = useState("");
+  const [fallbackRoomName] = useState(DEFAULT_ROOM);
 
   const {
     session,
@@ -59,12 +62,12 @@ export const App = () => {
   }, [initialize]);
 
   useEffect(() => {
-    if (!session || currentRoom || !minecraftRoomUrl) {
+    if (!session || currentRoom) {
       return;
     }
 
-    void connectToRoomByName(minecraftRoomUrl);
-  }, [session, currentRoom, minecraftRoomUrl, connectToRoomByName]);
+    void connectToRoomByName(minecraftRoomUrl.trim() || fallbackRoomName);
+  }, [session, currentRoom, minecraftRoomUrl, fallbackRoomName, connectToRoomByName]);
 
   useEffect(() => {
     if (!session || !currentRoom || voiceStatus !== "idle") {
