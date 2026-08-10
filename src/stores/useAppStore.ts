@@ -151,19 +151,6 @@ const normalizeUserName = (name: string): string =>
 
 const PROXIMITY_MAX_DISTANCE = 50;
 
-const isAppleMobileBrowser = (): boolean => {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  const ua = navigator.userAgent || "";
-  const isIOS = /iPhone|iPad|iPod/i.test(ua);
-  const isWebKit = /AppleWebKit/i.test(ua);
-  const isCriOS = /CriOS/i.test(ua);
-  const isFxiOS = /FxiOS/i.test(ua);
-  return isIOS && isWebKit && !isCriOS && !isFxiOS;
-};
-
 const toSpeakingThreshold = (sensitivity: number): number => {
   const safeSensitivity = Math.max(1, Math.min(100, Math.round(sensitivity)));
   return 0.012 + ((100 - safeSensitivity) / 100) * 0.05;
@@ -209,10 +196,6 @@ const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDist
 
   if (distance >= safeMaxDistance) {
     return 0;
-  }
-
-  if (isAppleMobileBrowser()) {
-    return 1;
   }
 
   return Math.max(0, Math.min(1, 1 - distance / safeMaxDistance));
