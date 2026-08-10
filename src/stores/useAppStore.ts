@@ -505,6 +505,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     applyMinecraftPlayerPositions: (players) => {
       const byName = new Map(players.map((player) => [normalizeUserName(player.name), player]));
+      const claimedPlayerNames = new Set<string>();
 
       set((state) => {
         if (!state.currentRoom) {
@@ -516,15 +517,28 @@ export const useAppStore = create<AppState>((set, get) => {
           const normalizedUserName = normalizeUserName(user.name);
           let match = byName.get(normalizedUserName);
 
+          if (match && claimedPlayerNames.has(normalizeUserName(match.name))) {
+            match = undefined;
+          }
+
           if (!match) {
             // Fallback for slight naming mismatches between login and Minecraft addon payload.
-            match = players.find((player) => {
+            // Only apply when there is exactly one unambiguous candidate.
+            const candidates = players.filter((player) => {
               const normalizedPlayerName = normalizeUserName(player.name);
+              if (claimedPlayerNames.has(normalizedPlayerName)) {
+                return false;
+              }
+
               return (
                 normalizedPlayerName.includes(normalizedUserName) ||
                 normalizedUserName.includes(normalizedPlayerName)
               );
             });
+
+            if (candidates.length === 1) {
+              match = candidates[0];
+            }
           }
 
           if (!match) {
@@ -538,6 +552,8 @@ export const useAppStore = create<AppState>((set, get) => {
               position: emptyMinecraftPosition()
             };
           }
+
+          claimedPlayerNames.add(normalizeUserName(match.name));
 
           if (
             user.position.x === match.x &&
