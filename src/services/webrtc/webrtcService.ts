@@ -68,6 +68,7 @@ export class WebRtcService {
   private readonly remoteStreams = new Map<string, MediaStream>();
   private readonly audioElements = new Map<string, HTMLAudioElement>();
   private readonly deafenState = new Map<string, boolean>();
+  private readonly proximityMuteState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
   private readonly pendingIceCandidates = new Map<string, RTCIceCandidateInit[]>();
   private localInputStream: MediaStream | null = null;
@@ -297,20 +298,14 @@ export class WebRtcService {
 
   setPeerDeafened(peerId: string, deafened: boolean): void {
     this.deafenState.set(peerId, deafened);
-    const audio = this.audioElements.get(peerId);
-    if (audio) {
-      audio.muted = deafened;
-    }
+    this.applyPeerAudioState(peerId);
   }
 
   setPeerVolume(peerId: string, volume: number): void {
     const safeVolume = Math.max(0, Math.min(1, volume));
     this.volumeState.set(peerId, safeVolume);
-
-    const audio = this.audioElements.get(peerId);
-    if (audio) {
-      audio.volume = safeVolume;
-    }
+    this.proximityMuteState.set(peerId, safeVolume <= 0.001);
+    this.applyPeerAudioState(peerId);
   }
 
   getDebugSnapshot(): WebRtcDebugSnapshot {
@@ -354,6 +349,7 @@ export class WebRtcService {
 
     this.remoteStreams.delete(peerId);
     this.deafenState.delete(peerId);
+    this.proximityMuteState.delete(peerId);
     this.volumeState.delete(peerId);
     this.pendingIceCandidates.delete(peerId);
     this.pendingPlaybackPeers.delete(peerId);
@@ -533,10 +529,24 @@ export class WebRtcService {
     }
 
     audio.srcObject = stream;
-    audio.muted = this.deafenState.get(peerId) ?? false;
-    const volume = this.volumeState.get(peerId) ?? 1;
-    audio.volume = volume;
+    this.applyPeerAudioState(peerId);
     void this.tryPlayRemoteAudio(peerId, audio);
+  }
+
+  private applyPeerAudioState(peerId: string): void {
+    const audio = this.audioElements.get(peerId);
+    if (!audio) {
+      return;
+    }
+
+    const deafened = this.deafenState.get(peerId) ?? false;
+    const mutedByDistance = this.proximityMuteState.get(peerId) ?? false;
+    const volume = this.volumeState.get(peerId) ?? 1;
+
+    // Mobile browsers can ignore HTMLAudioElement.volume changes.
+    // Force a hard mute when calculated distance volume reaches zero.
+    audio.muted = deafened || mutedByDistance;
+    audio.volume = volume;
   }
 
   private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {
