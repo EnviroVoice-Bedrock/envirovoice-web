@@ -395,6 +395,42 @@ button:disabled {
   gap: 8px;
 }
 
+.minecraft-raw-panel {
+  border: 1px solid rgba(69, 110, 149, 0.28);
+  border-radius: 10px;
+  background: rgba(8, 13, 22, 0.72);
+  padding: 8px 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.minecraft-raw-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.minecraft-raw-list li {
+  border: 1px solid rgba(83, 126, 166, 0.28);
+  border-radius: 8px;
+  background: rgba(7, 12, 20, 0.72);
+  padding: 6px 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.minecraft-raw-list li strong {
+  font-size: 0.92rem;
+}
+
+.minecraft-raw-list li span {
+  color: #a9c7db;
+  font-size: 0.84rem;
+}
+
 .nearby-users-head {
   display: flex;
   align-items: center;

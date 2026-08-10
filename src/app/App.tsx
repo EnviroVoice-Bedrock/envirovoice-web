@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MainLayout } from "../layouts/MainLayout";
 import { LoginPage } from "../pages/LoginPage";
 import { RoomPage } from "../pages/RoomPage";
+import type { MinecraftPlayerPosition } from "../services/api/firebaseVoiceSync";
 import { fetchMinecraftWorldState, syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
 import { useAppStore } from "../stores/useAppStore";
 
@@ -10,6 +11,7 @@ const DEFAULT_ROOM = "minecraft-global";
 export const App = () => {
   const [firebaseBaseUri, setFirebaseBaseUri] = useState("");
   const [minecraftRoomUrl, setMinecraftRoomUrl] = useState("");
+  const [minecraftPlayers, setMinecraftPlayers] = useState<MinecraftPlayerPosition[]>([]);
   const [fallbackRoomName] = useState(DEFAULT_ROOM);
 
   const {
@@ -54,6 +56,7 @@ export const App = () => {
     }
     setFirebaseBaseUri(nextBaseUri);
     setMinecraftRoomUrl("");
+    setMinecraftPlayers([]);
     setSession(name);
   };
 
@@ -88,10 +91,19 @@ export const App = () => {
       try {
         const worldState = await fetchMinecraftWorldState({ baseUri: firebaseBaseUri });
         if (!cancelled) {
+          setMinecraftPlayers(worldState.players);
           if (worldState.roomUrl) {
             setMinecraftRoomUrl(worldState.roomUrl);
           }
           applyMinecraftWorldState(worldState);
+
+          if (errorMessage?.includes("Esperando coordenadas de Minecraft")) {
+            const normalizedSelfName = session?.name.trim().toLowerCase() ?? "";
+            const hasSelfPosition = worldState.players.some((player) => player.name.trim().toLowerCase() === normalizedSelfName);
+            if (hasSelfPosition) {
+              clearError();
+            }
+          }
         }
       } catch {
         // Ignore transient polling errors to avoid spamming user-facing alerts.
@@ -107,7 +119,7 @@ export const App = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [session, firebaseBaseUri, applyMinecraftWorldState]);
+  }, [session, firebaseBaseUri, applyMinecraftWorldState, errorMessage, clearError]);
 
   useEffect(() => {
     if (!session || !currentRoom) {
@@ -163,6 +175,7 @@ export const App = () => {
           userId={session.id}
           voiceStatus={voiceStatus}
           minecraftRoomUrl={minecraftRoomUrl}
+          minecraftPlayers={minecraftPlayers}
           minecraftMaxDistance={minecraftMaxDistance}
           localMicLevel={localMicLevel}
           availableMicrophones={availableMicrophones}
