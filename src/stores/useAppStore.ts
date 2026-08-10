@@ -97,6 +97,29 @@ const upsertRoom = (rooms: Room[], room: Room): Room[] => {
   return cloned;
 };
 
+const mergeRoomPreservingPositions = (nextRoom: Room, previousRoom: Room | null | undefined): Room => {
+  if (!previousRoom) {
+    return nextRoom;
+  }
+
+  const previousUsersById = new Map(previousRoom.users.map((user) => [user.id, user]));
+
+  return {
+    ...nextRoom,
+    users: nextRoom.users.map((user) => {
+      const previousUser = previousUsersById.get(user.id);
+      if (!previousUser) {
+        return user;
+      }
+
+      return {
+        ...user,
+        position: previousUser.position
+      };
+    })
+  };
+};
+
 const hasMinecraftPosition = (user: RoomUser): boolean => {
   const p = user.position;
   return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
@@ -288,8 +311,8 @@ export const useAppStore = create<AppState>((set, get) => {
     if (message.type === "room-state" && message.payload) {
       const room = message.payload as Room;
       set((state) => ({
-        currentRoom: state.currentRoom?.id === room.id ? room : state.currentRoom,
-        rooms: upsertRoom(state.rooms, room)
+        currentRoom: state.currentRoom?.id === room.id ? mergeRoomPreservingPositions(room, state.currentRoom) : state.currentRoom,
+        rooms: upsertRoom(state.rooms, mergeRoomPreservingPositions(room, state.currentRoom?.id === room.id ? state.currentRoom : null))
       }));
 
       applyVoiceMix();
