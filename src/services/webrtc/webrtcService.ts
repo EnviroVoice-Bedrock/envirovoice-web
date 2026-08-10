@@ -179,10 +179,8 @@ export class WebRtcService {
       return this.localStream;
     }
 
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const hasMicrophone = devices.some((device) => device.kind === "audioinput");
-    if (!hasMicrophone) {
-      throw new DOMException("No microphone detected", "NotFoundError");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new DOMException("Media devices unavailable", "NotSupportedError");
     }
 
     if (forceRestart && this.localStream) {
@@ -196,23 +194,45 @@ export class WebRtcService {
     }
 
     logger.log("EnviroVoice", "Requesting microphone");
-    const inputStream = await navigator.mediaDevices.getUserMedia({
-      audio: this.selectedDeviceId
-        ? {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1,
-            deviceId: { exact: this.selectedDeviceId }
-          }
-        : {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1
-          },
-      video: false
-    });
+
+    const baseAudioConstraints: MediaTrackConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1
+    };
+
+    let inputStream: MediaStream;
+
+    try {
+      inputStream = await navigator.mediaDevices.getUserMedia({
+        audio: this.selectedDeviceId
+          ? {
+              ...baseAudioConstraints,
+              deviceId: { exact: this.selectedDeviceId }
+            }
+          : baseAudioConstraints,
+        video: false
+      });
+    } catch (err) {
+      const errorName = err instanceof DOMException ? err.name : "Unknown";
+      const shouldRetryWithoutDeviceId = Boolean(this.selectedDeviceId) && (
+        errorName === "OverconstrainedError" ||
+        errorName === "NotFoundError" ||
+        errorName === "AbortError"
+      );
+
+      if (!shouldRetryWithoutDeviceId) {
+        throw err;
+      }
+
+      logger.log("EnviroVoice", "Retrying microphone request without fixed deviceId", { errorName });
+      this.selectedDeviceId = null;
+      inputStream = await navigator.mediaDevices.getUserMedia({
+        audio: baseAudioConstraints,
+        video: false
+      });
+    }
 
     this.localInputStream = inputStream;
 
@@ -637,8 +657,8 @@ export class WebRtcService {
         mountainHighShelf.frequency.value = 3200;
         mountainHighShelf.gain.value = 5;
 
-        mountainDelay.delayTime.value = 0.14;
-        mountainFeedback.gain.value = 0.26;
+        mountainDelay.delayTime.value = 0.24;
+        mountainFeedback.gain.value = 0.42;
 
         buriedLowPass.type = "lowpass";
         buriedLowPass.frequency.value = 520;
@@ -754,8 +774,8 @@ export class WebRtcService {
     }
 
     if (effect === "mountain") {
-      chain.dryGain.gain.setTargetAtTime(0.74, now, 0.05);
-      chain.mountainGain.gain.setTargetAtTime(0.48, now, 0.05);
+      chain.dryGain.gain.setTargetAtTime(0.62, now, 0.05);
+      chain.mountainGain.gain.setTargetAtTime(0.72, now, 0.05);
       return;
     }
 
