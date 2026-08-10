@@ -381,6 +381,80 @@ button:disabled {
   padding: 22px;
   flex: 1 1 auto;
   min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.nearby-users-panel {
+  border: 1px solid rgba(87, 133, 173, 0.44);
+  border-radius: 12px;
+  background: rgba(12, 20, 32, 0.75);
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.nearby-users-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nearby-users-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.nearby-users-head span {
+  min-width: 34px;
+  text-align: center;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 143, 189, 0.65);
+  background: rgba(33, 63, 94, 0.6);
+  color: #d6ecff;
+  padding: 2px 8px;
+  font-weight: 700;
+}
+
+.nearby-users-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.nearby-users-list li {
+  border: 1px solid rgba(83, 126, 166, 0.42);
+  border-radius: 9px;
+  padding: 6px 8px;
+  background: rgba(10, 16, 26, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nearby-users-list li strong {
+  font-size: 0.96rem;
+}
+
+.nearby-users-list li span {
+  color: #9ec1dc;
+  font-size: 0.86rem;
+}
+
+.nearby-users-far summary {
+  color: #92aec5;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.nearby-users-list-far li {
+  border-color: rgba(113, 88, 88, 0.5);
+  background: rgba(31, 17, 17, 0.44);
 }
 
 .room-settings-popover {

@@ -5,7 +5,7 @@ type Props = {
   onLogin: (name: string, serverUrl: string) => void;
 };
 
-const DEFAULT_FIREBASE_URI = "https://envirovoice-test-default-rtdb.europe-west1.firebasedatabase.app/";
+const FIREBASE_URI_EXAMPLE = "https://tu-proyecto-default-rtdb.region.firebasedatabase.app/";
 
 const getAvatarUrl = (playerName: string): string => {
   const safeName = playerName.trim() || "WprousG";
@@ -14,7 +14,7 @@ const getAvatarUrl = (playerName: string): string => {
 
 export const LoginPage = ({ onLogin }: Props) => {
   const [name, setName] = useState("");
-  const [serverUrl, setServerUrl] = useState(DEFAULT_FIREBASE_URI);
+  const [serverUrl, setServerUrl] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -58,8 +58,9 @@ export const LoginPage = ({ onLogin }: Props) => {
             id="server-url"
             value={serverUrl}
             onChange={(event) => setServerUrl(event.target.value)}
-            placeholder={DEFAULT_FIREBASE_URI}
+            placeholder={FIREBASE_URI_EXAMPLE}
             autoComplete="off"
+            required
           />
 
           <label htmlFor="username">GAMERTAG</label>

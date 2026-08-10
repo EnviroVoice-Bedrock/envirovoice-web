@@ -5,45 +5,16 @@ import { RoomPage } from "../pages/RoomPage";
 import { fetchMinecraftWorldState, syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
 import { useAppStore } from "../stores/useAppStore";
 
-const DEFAULT_ROOM = "minecraft-global";
-
-const deriveRoomFromServerUrl = (input: string): string => {
-  const trimmed = input.trim().toLowerCase();
-  if (!trimmed) {
-    return DEFAULT_ROOM;
-  }
-
-  try {
-    const value = /^[a-z]+:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    const url = new URL(value);
-    const host = url.hostname.replace(/\./g, "-");
-    const path = url.pathname.replace(/^\/+/, "").replace(/\//g, "-");
-    const combined = [host, path].filter(Boolean).join("-");
-    const normalized = combined
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-
-    return normalized || DEFAULT_ROOM;
-  } catch {
-    const normalized = trimmed
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-
-    return normalized || DEFAULT_ROOM;
-  }
-};
-
 export const App = () => {
-  const [targetRoomName, setTargetRoomName] = useState(DEFAULT_ROOM);
-  const [firebaseBaseUri, setFirebaseBaseUri] = useState("https://envirovoice-test-default-rtdb.europe-west1.firebasedatabase.app/");
+  const [firebaseBaseUri, setFirebaseBaseUri] = useState("");
+  const [minecraftRoomUrl, setMinecraftRoomUrl] = useState("");
 
   const {
     session,
     currentRoom,
     voiceStatus,
     localMicLevel,
+    minecraftMaxDistance,
     availableMicrophones,
     selectedMicrophoneId,
     isSelfMuted,
@@ -74,9 +45,12 @@ export const App = () => {
       return;
     }
 
-    const nextBaseUri = serverUrl.trim() || "https://envirovoice-test-default-rtdb.europe-west1.firebasedatabase.app/";
+    const nextBaseUri = serverUrl.trim();
+    if (!nextBaseUri) {
+      return;
+    }
     setFirebaseBaseUri(nextBaseUri);
-    setTargetRoomName(deriveRoomFromServerUrl(serverUrl));
+    setMinecraftRoomUrl("");
     setSession(name);
   };
 
@@ -85,12 +59,12 @@ export const App = () => {
   }, [initialize]);
 
   useEffect(() => {
-    if (!session || currentRoom) {
+    if (!session || currentRoom || !minecraftRoomUrl) {
       return;
     }
 
-    void connectToRoomByName(targetRoomName);
-  }, [session, currentRoom, targetRoomName, connectToRoomByName]);
+    void connectToRoomByName(minecraftRoomUrl);
+  }, [session, currentRoom, minecraftRoomUrl, connectToRoomByName]);
 
   useEffect(() => {
     if (!session || !currentRoom || voiceStatus !== "idle") {
@@ -101,7 +75,7 @@ export const App = () => {
   }, [session, currentRoom, voiceStatus, startVoice]);
 
   useEffect(() => {
-    if (!session || !currentRoom) {
+    if (!session) {
       return;
     }
 
@@ -111,6 +85,9 @@ export const App = () => {
       try {
         const worldState = await fetchMinecraftWorldState({ baseUri: firebaseBaseUri });
         if (!cancelled) {
+          if (worldState.roomUrl) {
+            setMinecraftRoomUrl(worldState.roomUrl);
+          }
           applyMinecraftWorldState(worldState);
         }
       } catch {
@@ -127,7 +104,7 @@ export const App = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [session, currentRoom, firebaseBaseUri, applyMinecraftWorldState]);
+  }, [session, firebaseBaseUri, applyMinecraftWorldState]);
 
   useEffect(() => {
     if (!session || !currentRoom) {
@@ -182,6 +159,7 @@ export const App = () => {
           room={currentRoom}
           userId={session.id}
           voiceStatus={voiceStatus}
+          minecraftMaxDistance={minecraftMaxDistance}
           localMicLevel={localMicLevel}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}

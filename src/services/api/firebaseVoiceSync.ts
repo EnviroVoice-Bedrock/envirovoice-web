@@ -42,6 +42,7 @@ export type MinecraftPlayerPosition = {
 export type MinecraftWorldState = {
   players: MinecraftPlayerPosition[];
   maxDistance: number;
+  roomUrl: string;
 };
 
 const REQUEST_TIMEOUT_MS = 5000;
@@ -279,6 +280,24 @@ const extractMaxDistance = (snapshot: MinecraftSnapshot): number => {
   return Math.max(1, Math.min(300, value));
 };
 
+const extractRoomUrl = (snapshot: MinecraftSnapshot): string => {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return "";
+  }
+
+  const server = (snapshot as Record<string, unknown>).server;
+  if (!server || typeof server !== "object") {
+    return "";
+  }
+
+  const value = (server as Record<string, unknown>).roomUrl;
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+};
+
 export const fetchMinecraftPlayerPositions = async (options?: { baseUri?: string }): Promise<MinecraftPlayerPosition[]> => {
   const snapshot = await fetchMinecraftSnapshot(options?.baseUri);
   return collectPlayerPositions(snapshot);
@@ -288,20 +307,23 @@ export const fetchMinecraftWorldState = async (options?: { baseUri?: string }): 
   const snapshot = await fetchMinecraftSnapshot(options?.baseUri);
   return {
     players: collectPlayerPositions(snapshot),
-    maxDistance: extractMaxDistance(snapshot)
+    maxDistance: extractMaxDistance(snapshot),
+    roomUrl: extractRoomUrl(snapshot)
   };
 };
 
-const putVoiceSyncPayload = async (payload: {
-  firebaseBaseUri?: string;
+const putVoiceSyncPayload = async (
+  payload: {
   roomName: string;
   updatedAt: string;
   users: VoiceSyncUser[];
   players: SyncedPlayer[];
-}): Promise<void> => {
-  const url = payload.firebaseBaseUri?.trim()
-    ? buildFirebaseJsonUrl(payload.firebaseBaseUri, "envirovoice")
-    : ensureJsonUrl(env.envirovoiceDataUrl);
+  },
+  options?: {
+    baseUri?: string;
+  }
+): Promise<void> => {
+  const url = options?.baseUri?.trim() ? buildFirebaseJsonUrl(options.baseUri, "envirovoice") : ensureJsonUrl(env.envirovoiceDataUrl);
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -356,10 +378,9 @@ export const syncFirebaseVoiceState = async ({
   });
 
   await putVoiceSyncPayload({
-    firebaseBaseUri,
     roomName,
     updatedAt: new Date().toISOString(),
     users,
     players
-  });
+  }, { baseUri: firebaseBaseUri });
 };

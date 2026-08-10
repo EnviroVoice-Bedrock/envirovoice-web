@@ -9,6 +9,7 @@ type Props = {
   room: Room;
   userId: string;
   firebaseBaseUri: string;
+  minecraftMaxDistance: number;
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
   availableMicrophones: Array<{ id: string; label: string }>;
@@ -34,10 +35,16 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
   return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
 };
 
+const hasMinecraftPosition = (user: Room["users"][number]): boolean => {
+  const p = user.position;
+  return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
+};
+
 export const RoomPage = ({
   room,
   userId,
   firebaseBaseUri,
+  minecraftMaxDistance,
   voiceStatus,
   localMicLevel,
   availableMicrophones,
@@ -56,6 +63,7 @@ export const RoomPage = ({
   onLeave
 }: Props) => {
   const [showVoiceSettings, setShowVoiceSettings] = useState(true);
+  const safeMaxDistance = Math.max(1, Math.min(300, minecraftMaxDistance));
   const selfUser = room.users.find((user) => user.id === userId);
   const nearbyUsers = room.users
     .filter((user) => user.id !== userId)
@@ -69,7 +77,22 @@ export const RoomPage = ({
       return distanceA - distanceB;
     });
 
-  const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : room.users;
+  const usersWithDistance = nearbyUsers.map((user) => {
+    if (!selfUser || !hasMinecraftPosition(selfUser) || !hasMinecraftPosition(user)) {
+      return { user, distance: null as number | null, isNear: false, sameDimension: false };
+    }
+
+    const sameDimension = selfUser.position.dimension === user.position.dimension;
+    const distance = getDistance(selfUser.position.x, selfUser.position.y, selfUser.position.z, user.position.x, user.position.y, user.position.z);
+    const isNear = sameDimension && distance <= safeMaxDistance;
+
+    return { user, distance, isNear, sameDimension };
+  });
+
+  const closeUsers = usersWithDistance.filter((item) => item.isNear);
+  const farUsers = usersWithDistance.filter((item) => !item.isNear);
+
+  const visibleUsers = selfUser ? [selfUser, ...closeUsers.map((item) => item.user)] : room.users;
   const normalizedBase = firebaseBaseUri.trim().endsWith("/") ? firebaseBaseUri.trim() : `${firebaseBaseUri.trim()}/`;
   const minecraftEndpoint = `${normalizedBase}minecraft.json`;
   const envirovoiceEndpoint = `${normalizedBase}envirovoice.json`;
@@ -101,6 +124,42 @@ export const RoomPage = ({
       </header>
 
       <main className="room-stage">
+        <section className="nearby-users-panel" aria-label="Jugadores cerca">
+          <div className="nearby-users-head">
+            <h2>Jugadores cerca ({safeMaxDistance} bloques)</h2>
+            <span>{closeUsers.length}</span>
+          </div>
+
+          {closeUsers.length === 0 && <p className="panel-note">No hay jugadores dentro de {safeMaxDistance} bloques.</p>}
+
+          {closeUsers.length > 0 && (
+            <ul className="nearby-users-list">
+              {closeUsers.map(({ user, distance }) => (
+                <li key={`near-${user.id}`}>
+                  <strong>{user.name}</strong>
+                  <span>{distance ?? "--"} bloques</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {farUsers.length > 0 && (
+            <details className="nearby-users-far">
+              <summary>Fuera de rango o dimension distinta ({farUsers.length})</summary>
+              <ul className="nearby-users-list nearby-users-list-far">
+                {farUsers.map(({ user, distance, sameDimension }) => (
+                  <li key={`far-${user.id}`}>
+                    <strong>{user.name}</strong>
+                    <span>
+                      {sameDimension ? `${distance ?? "--"} bloques` : "Dimension distinta"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
+
         {visibleUsers.length ? (
           <ParticipantList
             users={visibleUsers}
@@ -159,6 +218,7 @@ export const RoomPage = ({
               <p>URI base: {normalizedBase}</p>
               <p>Datos del mundo: {minecraftEndpoint}</p>
               <p>Sync de voz: {envirovoiceEndpoint}</p>
+              <p>MaxDistance: {safeMaxDistance}</p>
               <ul>
                 {visibleUsers.map((user) => (
                   <li key={`talk-${user.id}`}>
