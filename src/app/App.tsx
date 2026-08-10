@@ -19,6 +19,7 @@ export const App = () => {
     voiceStatus,
     localMicLevel,
     minecraftMaxDistance,
+    environmentEffects,
     availableMicrophones,
     selectedMicrophoneId,
     isSelfMuted,
@@ -33,6 +34,7 @@ export const App = () => {
     refreshMicrophones,
     setMicrophone,
     setPeerVolume,
+    setEnvironmentEffect,
     applyMinecraftWorldState,
     setSelfMuted,
     setSelfDeafened,
@@ -193,6 +195,7 @@ export const App = () => {
           minecraftRoomUrl={minecraftRoomUrl}
           minecraftPlayers={minecraftPlayers}
           minecraftMaxDistance={minecraftMaxDistance}
+          environmentEffects={environmentEffects}
           localMicLevel={localMicLevel}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
@@ -203,6 +206,7 @@ export const App = () => {
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
           onSetPeerVolume={setPeerVolume}
+          onSetEnvironmentEffect={setEnvironmentEffect}
           onStartVoice={startVoice}
           onToggleSelfMute={() => setSelfMuted(!isSelfMuted)}
           onToggleSelfDeafen={() => setSelfDeafened(!isSelfDeafened)}

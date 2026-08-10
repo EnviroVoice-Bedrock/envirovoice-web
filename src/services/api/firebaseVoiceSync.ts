@@ -39,6 +39,10 @@ export type MinecraftPlayerPosition = {
   dimension: "overworld" | "nether" | "end";
   isMuted?: boolean;
   isDeafen?: boolean;
+  isUnderWater?: boolean;
+  isBuried?: boolean;
+  isInCave?: boolean;
+  isInMountain?: boolean;
   microphoneVolume?: number;
 };
 
@@ -189,6 +193,10 @@ const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPo
   const microphoneVolume = toNumber(candidate.microphoneVolume);
   const isMuted = toBoolean(candidate.isMuted);
   const isDeafen = toBoolean(candidate.isDeafen);
+  const isUnderWater = toBoolean(candidate.isUnderWater ?? candidate.isUnderwater);
+  const isBuried = toBoolean(candidate.isBuried);
+  const isInCave = toBoolean(candidate.isInCave ?? candidate.IsinCave);
+  const isInMountain = toBoolean(candidate.isInMountain ?? candidate.IsinMountain);
 
   return {
     name,
@@ -198,7 +206,11 @@ const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPo
     dimension,
     microphoneVolume: microphoneVolume == null ? undefined : microphoneVolume,
     isMuted: isMuted ?? undefined,
-    isDeafen: isDeafen ?? undefined
+    isDeafen: isDeafen ?? undefined,
+    isUnderWater: isUnderWater ?? undefined,
+    isBuried: isBuried ?? undefined,
+    isInCave: isInCave ?? undefined,
+    isInMountain: isInMountain ?? undefined
   };
 };
 

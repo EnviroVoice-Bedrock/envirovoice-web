@@ -1,16 +1,20 @@
 import { ParticipantList } from "../components/ParticipantList";
 import type { Room } from "../types/room";
+import type { MinecraftPlayerPosition } from "../services/api/firebaseVoiceSync";
 import envirovoiceLogo from "../../assets/Envirovoice Logo.png";
 import muteIcon from "../../assets/mute.png";
 import unmuteIcon from "../../assets/unmute.png";
 import { useState } from "react";
 
+type EnvironmentEffectKey = "underwater" | "buried" | "cave";
+
 type Props = {
   room: Room;
   userId: string;
   minecraftRoomUrl: string;
-  minecraftPlayers: Array<{ name: string; x: number; y: number; z: number; dimension: string }>;
+  minecraftPlayers: MinecraftPlayerPosition[];
   minecraftMaxDistance: number;
+  environmentEffects: Record<EnvironmentEffectKey, boolean>;
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
   availableMicrophones: Array<{ id: string; label: string }>;
@@ -22,6 +26,7 @@ type Props = {
   onRefreshMicrophones: () => Promise<void>;
   onSetMicrophone: (deviceId: string | null) => Promise<void>;
   onSetPeerVolume: (userId: string, volume: number) => void;
+  onSetEnvironmentEffect: (effect: EnvironmentEffectKey, enabled: boolean) => void;
   onStartVoice: () => Promise<void>;
   onToggleSelfMute: () => void;
   onToggleSelfDeafen: () => void;
@@ -49,12 +54,33 @@ const formatCoordinates = (user: Room["users"][number]): string =>
 const getPositionLabel = (user: Room["users"][number]): string =>
   hasMinecraftPosition(user) ? formatCoordinates(user) : "Sin coordenadas de Minecraft";
 
+const getEnvironmentLabel = (player: MinecraftPlayerPosition | undefined): string => {
+  if (!player) {
+    return "Normal";
+  }
+
+  if (player.isUnderWater) {
+    return "Bajo agua";
+  }
+
+  if (player.isBuried) {
+    return "Enterrado";
+  }
+
+  if (player.isInCave) {
+    return "Cueva";
+  }
+
+  return "Normal";
+};
+
 export const RoomPage = ({
   room,
   userId,
   minecraftRoomUrl,
   minecraftPlayers,
   minecraftMaxDistance,
+  environmentEffects,
   voiceStatus,
   localMicLevel,
   availableMicrophones,
@@ -66,6 +92,7 @@ export const RoomPage = ({
   onRefreshMicrophones,
   onSetMicrophone,
   onSetPeerVolume,
+  onSetEnvironmentEffect,
   onStartVoice,
   onToggleSelfMute,
   onToggleSelfDeafen,
@@ -73,6 +100,7 @@ export const RoomPage = ({
   onLeave
 }: Props) => {
   const [showVoiceSettings, setShowVoiceSettings] = useState(true);
+  const normalizedPlayers = new Map(minecraftPlayers.map((player) => [player.name.trim().toLowerCase(), player]));
   const safeMaxDistance = Math.max(1, Math.min(50, Math.max(1, Math.min(300, minecraftMaxDistance))));
   const selfUser = room.users.find((user) => user.id === userId);
   const nearbyUsers = room.users
@@ -161,6 +189,7 @@ export const RoomPage = ({
                   <div className="nearby-user-meta">
                     <strong>{user.name}</strong>
                     <small>{getPositionLabel(user)}</small>
+                    <small>Entorno: {getEnvironmentLabel(normalizedPlayers.get(user.name.trim().toLowerCase()))}</small>
                     <small>Volumen aplicado: {Math.round(finalVolume * 100)}%</small>
                   </div>
                   <span>{distance ?? "--"} bloques</span>
@@ -178,6 +207,7 @@ export const RoomPage = ({
                     <div className="nearby-user-meta">
                       <strong>{user.name}</strong>
                       <small>{getPositionLabel(user)}</small>
+                      <small>Entorno: {getEnvironmentLabel(normalizedPlayers.get(user.name.trim().toLowerCase()))}</small>
                       <small>Volumen aplicado: {Math.round(finalVolume * 100)}%</small>
                     </div>
                     <span>{sameDimension ? `${distance ?? "--"} bloques` : "Dimension distinta"}</span>
@@ -259,6 +289,35 @@ export const RoomPage = ({
             <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
               {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
             </button>
+
+            <section className="voice-effects-panel" aria-label="Efectos de entorno">
+              <small className="section-kicker">EFECTOS DE ENTORNO</small>
+              <small>Prioridad activa: Bajo agua &gt; Enterrado &gt; Cueva</small>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={environmentEffects.underwater}
+                  onChange={(event) => onSetEnvironmentEffect("underwater", event.target.checked)}
+                />
+                Bajo agua (isUnderWater)
+              </label>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={environmentEffects.buried}
+                  onChange={(event) => onSetEnvironmentEffect("buried", event.target.checked)}
+                />
+                Enterrado (isBuried)
+              </label>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={environmentEffects.cave}
+                  onChange={(event) => onSetEnvironmentEffect("cave", event.target.checked)}
+                />
+                Eco de cueva (isInCave)
+              </label>
+            </section>
 
             <section className="admin-panel" aria-label="Panel admin">
               <small className="section-kicker">ESTADO DE MINECRAFT</small>

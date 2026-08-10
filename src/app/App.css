@@ -628,6 +628,20 @@ button:disabled {
   gap: 10px;
 }
 
+.voice-effects-panel {
+  margin-top: 4px;
+  border: 1px solid rgba(83, 136, 111, 0.46);
+  border-radius: 10px;
+  background: rgba(12, 24, 17, 0.74);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.voice-effects-panel .checkbox-row {
+  color: #b5debf;
+}
+
 .admin-panel {
   margin-top: 6px;
   border: 1px solid rgba(89, 124, 156, 0.46);
@@ -816,6 +830,8 @@ input[type="range"] {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
+  position: relative;
+  overflow: hidden;
 }
 
 .participant-item-speaking {
@@ -825,6 +841,16 @@ input[type="range"] {
     0 0 22px rgba(87, 242, 135, 0.25),
     inset 0 0 0 1px rgba(87, 242, 135, 0.08);
   background: radial-gradient(circle at 24% 50%, rgba(87, 242, 135, 0.18) 0%, rgba(26, 29, 36, 0.62) 44%);
+}
+
+.participant-item-speaking::before {
+  content: "";
+  position: absolute;
+  inset: -48% 58% -48% -32%;
+  background: linear-gradient(120deg, rgba(87, 242, 135, 0.42), rgba(87, 242, 135, 0));
+  filter: blur(14px);
+  animation: speakingSweep 1.4s linear infinite;
+  pointer-events: none;
 }
 
 .avatar-frame {
@@ -1104,5 +1130,21 @@ input[type="range"] {
   50% {
     transform: scaleY(1);
     opacity: 1;
+  }
+}
+
+@keyframes speakingSweep {
+  0% {
+    transform: translateX(-46%);
+    opacity: 0.22;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+
+  100% {
+    transform: translateX(42%);
+    opacity: 0.18;
   }
 }
