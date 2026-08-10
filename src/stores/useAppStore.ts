@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apiClient } from "../services/api/client";
+import type { MinecraftPlayerPosition } from "../services/api/firebaseVoiceSync";
 import { SignalingClient } from "../services/signaling/signalingClient";
 import { WebRtcService } from "../services/webrtc/webrtcService";
 import type { Room, RoomUser } from "../types/room";
@@ -56,6 +57,7 @@ type AppState = {
   startVoice: () => Promise<void>;
   refreshMicrophones: () => Promise<void>;
   refreshDiagnostics: () => void;
+  applyMinecraftPlayerPositions: (players: MinecraftPlayerPosition[]) => void;
   setMicrophone: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
   setMonitorSelfVoice: (enabled: boolean) => void;
@@ -97,6 +99,8 @@ const hasMinecraftPosition = (user: RoomUser): boolean => {
   const p = user.position;
   return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
 };
+
+const normalizeUserName = (name: string): string => name.trim().toLowerCase();
 
 const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser): number => {
   if (!hasMinecraftPosition(selfUser) || !hasMinecraftPosition(otherUser)) {
@@ -457,6 +461,61 @@ export const useAppStore = create<AppState>((set, get) => {
         debugPeerInfo: debug.peers,
         debugLastPlaybackError: debug.lastPlaybackError
       });
+    },
+
+    applyMinecraftPlayerPositions: (players) => {
+      if (players.length === 0) {
+        return;
+      }
+
+      const byName = new Map(players.map((player) => [normalizeUserName(player.name), player]));
+
+      set((state) => {
+        if (!state.currentRoom) {
+          return state;
+        }
+
+        let changed = false;
+        const users = state.currentRoom.users.map((user) => {
+          const match = byName.get(normalizeUserName(user.name));
+          if (!match) {
+            return user;
+          }
+
+          if (
+            user.position.x === match.x &&
+            user.position.y === match.y &&
+            user.position.z === match.z &&
+            user.position.dimension === match.dimension
+          ) {
+            return user;
+          }
+
+          changed = true;
+          return {
+            ...user,
+            position: {
+              x: match.x,
+              y: match.y,
+              z: match.z,
+              dimension: match.dimension
+            }
+          };
+        });
+
+        if (!changed) {
+          return state;
+        }
+
+        return {
+          currentRoom: {
+            ...state.currentRoom,
+            users
+          }
+        };
+      });
+
+      applyVoiceMix();
     },
 
     setMicrophone: async (deviceId) => {

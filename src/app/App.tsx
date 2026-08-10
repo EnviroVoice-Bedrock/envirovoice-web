@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { MainLayout } from "../layouts/MainLayout";
 import { LoginPage } from "../pages/LoginPage";
 import { RoomPage } from "../pages/RoomPage";
-import { syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
+import { fetchMinecraftPlayerPositions, syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
 import { useAppStore } from "../stores/useAppStore";
 
 const DEFAULT_ROOM = "minecraft-global";
@@ -37,6 +37,7 @@ const deriveRoomFromServerUrl = (input: string): string => {
 
 export const App = () => {
   const [targetRoomName, setTargetRoomName] = useState(DEFAULT_ROOM);
+  const [firebaseBaseUri, setFirebaseBaseUri] = useState("https://envirovoice-test-default-rtdb.europe-west1.firebasedatabase.app/");
 
   const {
     session,
@@ -57,6 +58,7 @@ export const App = () => {
     refreshMicrophones,
     setMicrophone,
     setPeerVolume,
+    applyMinecraftPlayerPositions,
     setSelfMuted,
     setSelfDeafened,
     toggleUserDeafen,
@@ -72,6 +74,8 @@ export const App = () => {
       return;
     }
 
+    const nextBaseUri = serverUrl.trim() || "https://envirovoice-test-default-rtdb.europe-west1.firebasedatabase.app/";
+    setFirebaseBaseUri(nextBaseUri);
     setTargetRoomName(deriveRoomFromServerUrl(serverUrl));
     setSession(name);
   };
@@ -103,10 +107,40 @@ export const App = () => {
 
     let cancelled = false;
 
+    const pollMinecraft = async (): Promise<void> => {
+      try {
+        const players = await fetchMinecraftPlayerPositions({ baseUri: firebaseBaseUri });
+        if (!cancelled) {
+          applyMinecraftPlayerPositions(players);
+        }
+      } catch {
+        // Ignore transient polling errors to avoid spamming user-facing alerts.
+      }
+    };
+
+    void pollMinecraft();
+    const timer = window.setInterval(() => {
+      void pollMinecraft();
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [session, currentRoom, firebaseBaseUri, applyMinecraftPlayerPositions]);
+
+  useEffect(() => {
+    if (!session || !currentRoom) {
+      return;
+    }
+
+    let cancelled = false;
+
     const syncNow = async (): Promise<void> => {
       try {
         await syncFirebaseVoiceState({
           roomName: currentRoom.name,
+          firebaseBaseUri,
           users: currentRoom.users.map((user) => ({
             id: user.id,
             name: user.name,
@@ -131,7 +165,7 @@ export const App = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [session, currentRoom, deafenedUsers]);
+  }, [session, currentRoom, deafenedUsers, firebaseBaseUri]);
 
   return (
     <MainLayout>
@@ -155,6 +189,7 @@ export const App = () => {
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
           peerVolumes={peerVolumes}
+          firebaseBaseUri={firebaseBaseUri}
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
           onSetPeerVolume={setPeerVolume}

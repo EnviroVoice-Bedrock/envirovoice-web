@@ -8,6 +8,7 @@ import { useState } from "react";
 type Props = {
   room: Room;
   userId: string;
+  firebaseBaseUri: string;
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
   availableMicrophones: Array<{ id: string; label: string }>;
@@ -36,6 +37,7 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
 export const RoomPage = ({
   room,
   userId,
+  firebaseBaseUri,
   voiceStatus,
   localMicLevel,
   availableMicrophones,
@@ -68,6 +70,9 @@ export const RoomPage = ({
     });
 
   const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : room.users;
+  const normalizedBase = firebaseBaseUri.trim().endsWith("/") ? firebaseBaseUri.trim() : `${firebaseBaseUri.trim()}/`;
+  const minecraftEndpoint = `${normalizedBase}minecraft.json`;
+  const envirovoiceEndpoint = `${normalizedBase}envirovoice.json`;
   const micStatusText =
     voiceStatus === "ready"
       ? "Voz activa"
@@ -148,6 +153,20 @@ export const RoomPage = ({
             <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
               {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
             </button>
+
+            <section className="admin-panel" aria-label="Panel admin">
+              <small className="section-kicker">ADMIN PANEL</small>
+              <p>URI base: {normalizedBase}</p>
+              <p>Datos del mundo: {minecraftEndpoint}</p>
+              <p>Sync de voz: {envirovoiceEndpoint}</p>
+              <ul>
+                {visibleUsers.map((user) => (
+                  <li key={`talk-${user.id}`}>
+                    {user.name}: isTalking={user.speaking ? "true" : "false"}
+                  </li>
+                ))}
+              </ul>
+            </section>
           </div>
         </aside>
       )}

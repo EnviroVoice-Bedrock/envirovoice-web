@@ -16,6 +16,7 @@ type VoiceSyncInput = {
 type SyncedPlayer = {
   name: string;
   isSpeaking: boolean;
+  isTalking: boolean;
   muted: boolean;
   deafened: boolean;
   connected: boolean;
@@ -30,9 +31,51 @@ type MinecraftSnapshot =
   | unknown[]
   | Record<string, unknown>;
 
+export type MinecraftPlayerPosition = {
+  name: string;
+  x: number;
+  y: number;
+  z: number;
+  dimension: "overworld" | "nether" | "end";
+};
+
 const REQUEST_TIMEOUT_MS = 5000;
 
 const normalizeName = (name: string): string => name.trim().toLowerCase();
+
+const DEFAULT_BASE_URI = "https://envirovoice-test-default-rtdb.europe-west1.firebasedatabase.app/";
+
+const normalizeDimension = (value: unknown): "overworld" | "nether" | "end" => {
+  if (typeof value !== "string") {
+    return "overworld";
+  }
+
+  const text = value.trim().toLowerCase();
+  if (text.includes("nether")) {
+    return "nether";
+  }
+
+  if (text.includes("end")) {
+    return "end";
+  }
+
+  return "overworld";
+};
+
+const toNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
 
 const ensureJsonUrl = (url: string): string => {
   const trimmed = url.trim();
@@ -41,6 +84,19 @@ const ensureJsonUrl = (url: string): string => {
   }
 
   return trimmed.endsWith(".json") ? trimmed : `${trimmed}.json`;
+};
+
+const normalizeBaseUri = (baseUri?: string): string => {
+  const trimmed = (baseUri ?? "").trim();
+  if (!trimmed) {
+    return DEFAULT_BASE_URI;
+  }
+
+  return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+};
+
+const buildFirebaseJsonUrl = (baseUri: string, resource: "minecraft" | "envirovoice"): string => {
+  return ensureJsonUrl(`${normalizeBaseUri(baseUri)}${resource}`);
 };
 
 const getPlayerName = (value: unknown): string | null => {
@@ -64,6 +120,66 @@ const getPlayerName = (value: unknown): string | null => {
   }
 
   return null;
+};
+
+const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPosition | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const positionBlock = candidate.position && typeof candidate.position === "object" ? (candidate.position as Record<string, unknown>) : candidate;
+
+  const x = toNumber(positionBlock.x ?? positionBlock.posX ?? positionBlock.locationX);
+  const y = toNumber(positionBlock.y ?? positionBlock.posY ?? positionBlock.locationY);
+  const z = toNumber(positionBlock.z ?? positionBlock.posZ ?? positionBlock.locationZ);
+
+  if (x == null || y == null || z == null) {
+    return null;
+  }
+
+  const directName = getPlayerName(candidate);
+  const fallbackName = keyHint && keyHint.trim() && keyHint !== "players" && keyHint !== "onlinePlayers" ? keyHint.trim() : null;
+  const name = directName ?? fallbackName;
+
+  if (!name) {
+    return null;
+  }
+
+  const dimension = normalizeDimension(positionBlock.dimension ?? positionBlock.dim ?? candidate.dimension ?? candidate.world);
+
+  return { name, x, y, z, dimension };
+};
+
+const collectPlayerPositions = (snapshot: MinecraftSnapshot): MinecraftPlayerPosition[] => {
+  const deduped = new Map<string, MinecraftPlayerPosition>();
+
+  const walk = (value: unknown, keyHint?: string): void => {
+    const extracted = tryExtractPosition(value, keyHint);
+    if (extracted) {
+      deduped.set(normalizeName(extracted.name), extracted);
+    }
+
+    if (!value || typeof value !== "object") {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        walk(item);
+      }
+      return;
+    }
+
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (nested && typeof nested === "object") {
+        walk(nested, key);
+      }
+    }
+  };
+
+  walk(snapshot);
+  return [...deduped.values()];
 };
 
 const collectPlayerNames = (snapshot: MinecraftSnapshot): string[] => {
@@ -113,8 +229,8 @@ const collectPlayerNames = (snapshot: MinecraftSnapshot): string[] => {
   return [...names];
 };
 
-const fetchMinecraftSnapshot = async (): Promise<MinecraftSnapshot> => {
-  const url = ensureJsonUrl(env.minecraftDataUrl);
+const fetchMinecraftSnapshot = async (baseUri?: string): Promise<MinecraftSnapshot> => {
+  const url = baseUri?.trim() ? buildFirebaseJsonUrl(baseUri, "minecraft") : ensureJsonUrl(env.minecraftDataUrl);
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -135,13 +251,21 @@ const fetchMinecraftSnapshot = async (): Promise<MinecraftSnapshot> => {
   }
 };
 
+export const fetchMinecraftPlayerPositions = async (options?: { baseUri?: string }): Promise<MinecraftPlayerPosition[]> => {
+  const snapshot = await fetchMinecraftSnapshot(options?.baseUri);
+  return collectPlayerPositions(snapshot);
+};
+
 const putVoiceSyncPayload = async (payload: {
+  firebaseBaseUri?: string;
   roomName: string;
   updatedAt: string;
   users: VoiceSyncUser[];
   players: SyncedPlayer[];
 }): Promise<void> => {
-  const url = ensureJsonUrl(env.envirovoiceDataUrl);
+  const url = payload.firebaseBaseUri?.trim()
+    ? buildFirebaseJsonUrl(payload.firebaseBaseUri, "envirovoice")
+    : ensureJsonUrl(env.envirovoiceDataUrl);
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -163,7 +287,13 @@ const putVoiceSyncPayload = async (payload: {
   }
 };
 
-export const syncFirebaseVoiceState = async ({ roomName, users }: VoiceSyncInput): Promise<void> => {
+export const syncFirebaseVoiceState = async ({
+  roomName,
+  users,
+  firebaseBaseUri
+}: VoiceSyncInput & {
+  firebaseBaseUri?: string;
+}): Promise<void> => {
   const usersByName = new Map<string, VoiceSyncUser>();
   for (const user of users) {
     usersByName.set(normalizeName(user.name), user);
@@ -171,7 +301,7 @@ export const syncFirebaseVoiceState = async ({ roomName, users }: VoiceSyncInput
 
   let minecraftPlayerNames: string[] = [];
   try {
-    const snapshot = await fetchMinecraftSnapshot();
+    const snapshot = await fetchMinecraftSnapshot(firebaseBaseUri);
     minecraftPlayerNames = collectPlayerNames(snapshot);
   } catch {
     // Allow sync to proceed even when Minecraft data is unavailable.
@@ -182,6 +312,7 @@ export const syncFirebaseVoiceState = async ({ roomName, users }: VoiceSyncInput
     return {
       name,
       isSpeaking: matched?.speaking ?? false,
+      isTalking: matched?.speaking ?? false,
       muted: matched?.muted ?? false,
       deafened: matched?.deafened ?? false,
       connected: Boolean(matched)
@@ -189,6 +320,7 @@ export const syncFirebaseVoiceState = async ({ roomName, users }: VoiceSyncInput
   });
 
   await putVoiceSyncPayload({
+    firebaseBaseUri,
     roomName,
     updatedAt: new Date().toISOString(),
     users,

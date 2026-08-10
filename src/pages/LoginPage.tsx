@@ -5,6 +5,8 @@ type Props = {
   onLogin: (name: string, serverUrl: string) => void;
 };
 
+const DEFAULT_FIREBASE_URI = "https://envirovoice-test-default-rtdb.europe-west1.firebasedatabase.app/";
+
 const getAvatarUrl = (playerName: string): string => {
   const safeName = playerName.trim() || "WprousG";
   return `https://mc-api.io/render/face/${encodeURIComponent(safeName)}/bedrock?size=256`;
@@ -12,7 +14,7 @@ const getAvatarUrl = (playerName: string): string => {
 
 export const LoginPage = ({ onLogin }: Props) => {
   const [name, setName] = useState("");
-  const [serverUrl, setServerUrl] = useState("https://render.com");
+  const [serverUrl, setServerUrl] = useState(DEFAULT_FIREBASE_URI);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -51,12 +53,12 @@ export const LoginPage = ({ onLogin }: Props) => {
             onLogin(name, serverUrl);
           }}
         >
-          <label htmlFor="server-url">URL / CODIGO DE SALA</label>
+          <label htmlFor="server-url">URI FIREBASE BASE</label>
           <input
             id="server-url"
             value={serverUrl}
             onChange={(event) => setServerUrl(event.target.value)}
-            placeholder="https://mi-servidor.com/sala-global"
+            placeholder={DEFAULT_FIREBASE_URI}
             autoComplete="off"
           />
 
@@ -80,7 +82,7 @@ export const LoginPage = ({ onLogin }: Props) => {
           <button type="submit" className="button-primary button-large">
             Entrar
           </button>
-          <small className="panel-note">Esa URL/codigo define a que sala te conectas.</small>
+          <small className="panel-note">Se usa como base para + minecraft.json y + envirovoice.json.</small>
           <small className="credits-line">DEVELOPED BY Halo333X, WprousG</small>
         </form>
       </article>
