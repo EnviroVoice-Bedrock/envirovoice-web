@@ -89,6 +89,7 @@ export class WebRtcService {
   private readonly remoteStreams = new Map<string, MediaStream>();
   private readonly audioElements = new Map<string, HTMLAudioElement>();
   private readonly remoteAudioChains = new Map<string, RemoteAudioChain>();
+  private audioHost: HTMLDivElement | null = null;
   private readonly deafenState = new Map<string, boolean>();
   private readonly environmentEffectState = new Map<string, EnvironmentEffect>();
   private readonly proximityMuteState = new Map<string, boolean>();
@@ -600,8 +601,12 @@ export class WebRtcService {
     if (!audio) {
       audio = new Audio();
       audio.autoplay = true;
+      audio.preload = "auto";
+      audio.muted = false;
       audio.setAttribute("playsinline", "true");
+      audio.controls = false;
       this.audioElements.set(peerId, audio);
+      this.attachAudioElement(audio);
     }
 
     const processedStream = this.bindRemoteAudioGraph(peerId, stream) ?? stream;
@@ -787,6 +792,8 @@ export class WebRtcService {
 
   private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {
     try {
+      void this.ensureRemoteAudioContextRunning();
+      audio.load();
       await audio.play();
       this.lastPlaybackError = null;
       this.pendingPlaybackPeers.delete(peerId);
@@ -873,6 +880,28 @@ export class WebRtcService {
       await this.remoteAudioContext.resume();
     } catch (err) {
       logger.error("EnviroVoice", "Failed to resume remote audio context", err);
+    }
+  }
+
+  private attachAudioElement(audio: HTMLAudioElement): void {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (!this.audioHost) {
+      this.audioHost = document.createElement("div");
+      this.audioHost.setAttribute("aria-hidden", "true");
+      this.audioHost.style.position = "fixed";
+      this.audioHost.style.left = "-9999px";
+      this.audioHost.style.top = "-9999px";
+      this.audioHost.style.width = "1px";
+      this.audioHost.style.height = "1px";
+      this.audioHost.style.overflow = "hidden";
+      document.body.appendChild(this.audioHost);
+    }
+
+    if (!audio.parentElement) {
+      this.audioHost.appendChild(audio);
     }
   }
 
