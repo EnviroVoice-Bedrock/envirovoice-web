@@ -342,17 +342,49 @@ const extractRoomUrl = (snapshot: MinecraftSnapshot): string => {
     return "";
   }
 
-  const server = (snapshot as Record<string, unknown>).server;
-  if (!server || typeof server !== "object") {
+  const normalizeRoomName = (value: unknown): string => {
+    if (typeof value !== "string") {
+      return "";
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "";
+    }
+
+    const withoutQuery = trimmed.split("?")[0] ?? trimmed;
+    const slashSeparated = withoutQuery.split("/").filter(Boolean);
+    const candidate = slashSeparated.length > 0 ? slashSeparated[slashSeparated.length - 1] : withoutQuery;
+    return candidate.replace(/\.json$/i, "").trim();
+  };
+
+  const pickFromObject = (record: Record<string, unknown>): string => {
+    const keys = ["roomUrl", "roomURL", "roomName", "room", "roomId", "voiceRoom", "url"];
+    for (const key of keys) {
+      const normalized = normalizeRoomName(record[key]);
+      if (normalized) {
+        return normalized;
+      }
+    }
+
     return "";
+  };
+
+  const root = snapshot as Record<string, unknown>;
+
+  const fromServer = root.server && typeof root.server === "object"
+    ? pickFromObject(root.server as Record<string, unknown>)
+    : "";
+  if (fromServer) {
+    return fromServer;
   }
 
-  const value = (server as Record<string, unknown>).roomUrl;
-  if (typeof value !== "string") {
-    return "";
+  const fromRoot = pickFromObject(root);
+  if (fromRoot) {
+    return fromRoot;
   }
 
-  return value.trim();
+  return "";
 };
 
 export const fetchMinecraftPlayerPositions = async (options?: { baseUri?: string }): Promise<MinecraftPlayerPosition[]> => {

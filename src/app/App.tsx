@@ -7,6 +7,7 @@ import { fetchMinecraftWorldState, syncFirebaseVoiceState } from "../services/ap
 import { useAppStore } from "../stores/useAppStore";
 
 const MINECRAFT_POLL_INTERVAL_MS = 500;
+const FALLBACK_ROOM_NAME = "envirovoice-default";
 
 export const App = () => {
   const [firebaseBaseUri, setFirebaseBaseUri] = useState("");
@@ -99,9 +100,8 @@ export const App = () => {
         const worldState = await fetchMinecraftWorldState({ baseUri: firebaseBaseUri });
         if (!cancelled) {
           setMinecraftPlayers(worldState.players);
-          if (worldState.roomUrl) {
-            setMinecraftRoomUrl(worldState.roomUrl);
-          }
+          const resolvedRoomName = worldState.roomUrl.trim() || FALLBACK_ROOM_NAME;
+          setMinecraftRoomUrl(resolvedRoomName);
           applyMinecraftWorldState(worldState);
 
           const selfPlayer = worldState.players.find((player) => normalizeName(player.name) === normalizeName(session.name));
