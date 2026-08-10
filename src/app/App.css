@@ -437,6 +437,17 @@ button:disabled {
   gap: 8px;
 }
 
+.nearby-user-meta {
+  display: grid;
+  gap: 1px;
+}
+
+.nearby-user-meta small {
+  color: #8ea9bf;
+  font-size: 0.78rem;
+  line-height: 1.1;
+}
+
 .nearby-users-list li strong {
   font-size: 0.96rem;
 }

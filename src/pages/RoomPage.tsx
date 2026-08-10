@@ -41,6 +41,9 @@ const hasMinecraftPosition = (user: Room["users"][number]): boolean => {
   return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
 };
 
+const formatCoordinates = (user: Room["users"][number]): string =>
+  `${user.position.x.toFixed(1)}, ${user.position.y.toFixed(1)}, ${user.position.z.toFixed(1)}`;
+
 export const RoomPage = ({
   room,
   userId,
@@ -99,6 +102,7 @@ export const RoomPage = ({
   const minecraftEndpoint = `${normalizedBase}minecraft.json`;
   const envirovoiceEndpoint = `${normalizedBase}envirovoice.json`;
   const roomUrlLabel = minecraftRoomUrl.trim() || "Esperando roomUrl de Minecraft";
+  const selfCoordinates = selfUser && hasMinecraftPosition(selfUser) ? formatCoordinates(selfUser) : "Sin coordenadas";
   const micStatusText =
     voiceStatus === "ready"
       ? "Voz activa"
@@ -139,7 +143,10 @@ export const RoomPage = ({
             <ul className="nearby-users-list">
               {closeUsers.map(({ user, distance }) => (
                 <li key={`near-${user.id}`}>
-                  <strong>{user.name}</strong>
+                  <div className="nearby-user-meta">
+                    <strong>{user.name}</strong>
+                    <small>{formatCoordinates(user)}</small>
+                  </div>
                   <span>{distance ?? "--"} bloques</span>
                 </li>
               ))}
@@ -152,10 +159,11 @@ export const RoomPage = ({
               <ul className="nearby-users-list nearby-users-list-far">
                 {farUsers.map(({ user, distance, sameDimension }) => (
                   <li key={`far-${user.id}`}>
-                    <strong>{user.name}</strong>
-                    <span>
-                      {sameDimension ? `${distance ?? "--"} bloques` : "Dimension distinta"}
-                    </span>
+                    <div className="nearby-user-meta">
+                      <strong>{user.name}</strong>
+                      <small>{formatCoordinates(user)}</small>
+                    </div>
+                    <span>{sameDimension ? `${distance ?? "--"} bloques` : "Dimension distinta"}</span>
                   </li>
                 ))}
               </ul>
@@ -223,10 +231,11 @@ export const RoomPage = ({
               <p>Datos del mundo: {minecraftEndpoint}</p>
               <p>Sync de voz: {envirovoiceEndpoint}</p>
               <p>MaxDistance: {safeMaxDistance}</p>
+              <p>Tu posición: {selfCoordinates}</p>
               <ul>
                 {visibleUsers.map((user) => (
                   <li key={`talk-${user.id}`}>
-                    {user.name}: isTalking={user.speaking ? "true" : "false"}
+                    {user.name}: {formatCoordinates(user)} isTalking={user.speaking ? "true" : "false"}
                   </li>
                 ))}
               </ul>
