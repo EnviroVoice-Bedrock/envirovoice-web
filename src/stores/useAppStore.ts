@@ -502,10 +502,6 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     applyMinecraftPlayerPositions: (players) => {
-      if (players.length === 0) {
-        return;
-      }
-
       const byName = new Map(players.map((player) => [normalizeUserName(player.name), player]));
 
       set((state) => {

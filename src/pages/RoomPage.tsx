@@ -44,6 +44,9 @@ const hasMinecraftPosition = (user: Room["users"][number]): boolean => {
 const formatCoordinates = (user: Room["users"][number]): string =>
   `${user.position.x.toFixed(1)}, ${user.position.y.toFixed(1)}, ${user.position.z.toFixed(1)}`;
 
+const getPositionLabel = (user: Room["users"][number]): string =>
+  hasMinecraftPosition(user) ? formatCoordinates(user) : "Sin coordenadas de Minecraft";
+
 export const RoomPage = ({
   room,
   userId,
@@ -84,18 +87,19 @@ export const RoomPage = ({
 
   const usersWithDistance = nearbyUsers.map((user) => {
     if (!selfUser || !hasMinecraftPosition(selfUser) || !hasMinecraftPosition(user)) {
-      return { user, distance: null as number | null, isNear: false, sameDimension: false };
+      return { user, distance: null as number | null, isNear: false, sameDimension: false, hasPosition: hasMinecraftPosition(user) };
     }
 
     const sameDimension = selfUser.position.dimension === user.position.dimension;
     const distance = getDistance(selfUser.position.x, selfUser.position.y, selfUser.position.z, user.position.x, user.position.y, user.position.z);
     const isNear = sameDimension && distance <= safeMaxDistance;
 
-    return { user, distance, isNear, sameDimension };
+    return { user, distance, isNear, sameDimension, hasPosition: true };
   });
 
   const closeUsers = usersWithDistance.filter((item) => item.isNear);
-  const farUsers = usersWithDistance.filter((item) => !item.isNear);
+  const farUsers = usersWithDistance.filter((item) => !item.isNear && item.hasPosition);
+  const usersWithoutData = usersWithDistance.filter((item) => !item.hasPosition);
 
   const visibleUsers = selfUser ? [selfUser, ...closeUsers.map((item) => item.user)] : room.users;
   const roomUrlLabel = minecraftRoomUrl.trim() || "Esperando roomUrl de Minecraft";
@@ -142,7 +146,7 @@ export const RoomPage = ({
                 <li key={`near-${user.id}`}>
                   <div className="nearby-user-meta">
                     <strong>{user.name}</strong>
-                    <small>{formatCoordinates(user)}</small>
+                    <small>{getPositionLabel(user)}</small>
                   </div>
                   <span>{distance ?? "--"} bloques</span>
                 </li>
@@ -158,9 +162,26 @@ export const RoomPage = ({
                   <li key={`far-${user.id}`}>
                     <div className="nearby-user-meta">
                       <strong>{user.name}</strong>
-                      <small>{formatCoordinates(user)}</small>
+                      <small>{getPositionLabel(user)}</small>
                     </div>
                     <span>{sameDimension ? `${distance ?? "--"} bloques` : "Dimension distinta"}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          {usersWithoutData.length > 0 && (
+            <details className="nearby-users-far">
+              <summary>Sin datos de Minecraft ({usersWithoutData.length})</summary>
+              <ul className="nearby-users-list nearby-users-list-far">
+                {usersWithoutData.map(({ user }) => (
+                  <li key={`missing-${user.id}`}>
+                    <div className="nearby-user-meta">
+                      <strong>{user.name}</strong>
+                      <small>{getPositionLabel(user)}</small>
+                    </div>
+                    <span>Esperando snapshot</span>
                   </li>
                 ))}
               </ul>
