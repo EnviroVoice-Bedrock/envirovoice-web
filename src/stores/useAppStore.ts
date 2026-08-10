@@ -314,6 +314,16 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   };
 
+  const retryPeerSync = (): void => {
+    const { session, currentRoom, voiceStatus } = get();
+    if (!session || !currentRoom || voiceStatus !== "ready") {
+      return;
+    }
+
+    webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
+    void webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
+  };
+
   signaling.onMessage((message) => {
     if (message.type === "room-state" && message.payload) {
       const room = message.payload as Room;
@@ -345,6 +355,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     if (message.type === "user-joined") {
       logger.log("Rooms", "User joined", message.payload);
+      retryPeerSync();
       return;
     }
 
@@ -391,6 +402,9 @@ export const useAppStore = create<AppState>((set, get) => {
 
     if (message.type === "error") {
       const payload = message.payload as { message?: string } | undefined;
+      if (payload?.message?.includes("target not found")) {
+        retryPeerSync();
+      }
       set({ errorMessage: payload?.message ?? "Unknown signaling error" });
     }
   });

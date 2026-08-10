@@ -69,6 +69,7 @@ export class WebRtcService {
   private readonly audioElements = new Map<string, HTMLAudioElement>();
   private readonly deafenState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
+  private readonly pendingIceCandidates = new Map<string, RTCIceCandidateInit[]>();
   private localInputStream: MediaStream | null = null;
   private localStream: MediaStream | null = null;
   private localAudioContext: AudioContext | null = null;
@@ -242,6 +243,7 @@ export class WebRtcService {
 
     const peer = this.ensurePeer(from);
     await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    await this.flushPendingIceCandidates(from, peer);
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
 
@@ -271,6 +273,7 @@ export class WebRtcService {
     }
 
     await peer.setRemoteDescription(new RTCSessionDescription(answer));
+    await this.flushPendingIceCandidates(from, peer);
     logger.log("EnviroVoice", "Answer received");
   }
 
@@ -281,7 +284,10 @@ export class WebRtcService {
     }
 
     const peer = this.peers.get(from);
-    if (!peer) {
+    if (!peer || !peer.remoteDescription) {
+      const queued = this.pendingIceCandidates.get(from) ?? [];
+      queued.push(candidate);
+      this.pendingIceCandidates.set(from, queued);
       return;
     }
 
@@ -349,6 +355,7 @@ export class WebRtcService {
     this.remoteStreams.delete(peerId);
     this.deafenState.delete(peerId);
     this.volumeState.delete(peerId);
+    this.pendingIceCandidates.delete(peerId);
     this.pendingPlaybackPeers.delete(peerId);
   }
 
@@ -395,7 +402,23 @@ export class WebRtcService {
     this.context = null;
     this.lastSpeakingState = false;
     this.lastPlaybackError = null;
+    this.pendingIceCandidates.clear();
     this.detachUnlockAudioHandlers();
+  }
+
+  private async flushPendingIceCandidates(peerId: string, peer: RTCPeerConnection): Promise<void> {
+    const queued = this.pendingIceCandidates.get(peerId);
+    if (!queued?.length || !peer.remoteDescription) {
+      return;
+    }
+
+    this.pendingIceCandidates.delete(peerId);
+
+    for (const candidate of queued) {
+      await peer.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+
+    logger.log("EnviroVoice", "Queued ICE candidates applied", { peerId, count: queued.length });
   }
 
   private ensurePeer(peerId: string): RTCPeerConnection {
