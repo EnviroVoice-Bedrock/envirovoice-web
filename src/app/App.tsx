@@ -6,14 +6,12 @@ import type { MinecraftPlayerPosition } from "../services/api/firebaseVoiceSync"
 import { fetchMinecraftWorldState, syncFirebaseVoiceState } from "../services/api/firebaseVoiceSync";
 import { useAppStore } from "../stores/useAppStore";
 
-const DEFAULT_ROOM = "minecraft-global";
-const MINECRAFT_POLL_INTERVAL_MS = 250;
+const MINECRAFT_POLL_INTERVAL_MS = 500;
 
 export const App = () => {
   const [firebaseBaseUri, setFirebaseBaseUri] = useState("");
   const [minecraftRoomUrl, setMinecraftRoomUrl] = useState("");
   const [minecraftPlayers, setMinecraftPlayers] = useState<MinecraftPlayerPosition[]>([]);
-  const [fallbackRoomName] = useState(DEFAULT_ROOM);
 
   const {
     session,
@@ -39,7 +37,6 @@ export const App = () => {
     setSelfMuted,
     setSelfDeafened,
     toggleUserDeafen,
-    leaveRoom,
     logout,
     resetForTesting,
     clearError
@@ -73,25 +70,13 @@ export const App = () => {
       return;
     }
 
-    void connectToRoomByName(minecraftRoomUrl.trim() || fallbackRoomName);
-  }, [session, currentRoom, minecraftRoomUrl, fallbackRoomName, connectToRoomByName]);
-
-  useEffect(() => {
-    if (!session || !currentRoom) {
-      return;
-    }
-
     const targetRoomName = minecraftRoomUrl.trim();
     if (!targetRoomName) {
       return;
     }
 
-    if (currentRoom.name.trim().toLowerCase() === targetRoomName.toLowerCase()) {
-      return;
-    }
-
-    void leaveRoom();
-  }, [session, currentRoom, minecraftRoomUrl, leaveRoom]);
+    void connectToRoomByName(targetRoomName);
+  }, [session, currentRoom, minecraftRoomUrl, connectToRoomByName]);
 
   useEffect(() => {
     if (!session || !currentRoom || voiceStatus !== "idle") {
@@ -107,15 +92,7 @@ export const App = () => {
     }
 
     let cancelled = false;
-    let polling = false;
-
     const pollMinecraft = async (): Promise<void> => {
-      if (polling) {
-        return;
-      }
-
-      polling = true;
-
       try {
         const worldState = await fetchMinecraftWorldState({ baseUri: firebaseBaseUri });
         if (!cancelled) {
@@ -146,8 +123,6 @@ export const App = () => {
         }
       } catch {
         // Ignore transient polling errors to avoid spamming user-facing alerts.
-      } finally {
-        polling = false;
       }
     };
 
@@ -160,7 +135,7 @@ export const App = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [session, firebaseBaseUri, currentRoom, applyMinecraftWorldState, errorMessage, clearError, isSelfMuted, isSelfDeafened, setPeerVolume, setSelfMuted, setSelfDeafened]);
+  }, [session, firebaseBaseUri, currentRoom, applyMinecraftWorldState, errorMessage, clearError, isSelfMuted, isSelfDeafened, setSelfMuted, setSelfDeafened]);
 
   useEffect(() => {
     if (!session || !currentRoom) {
