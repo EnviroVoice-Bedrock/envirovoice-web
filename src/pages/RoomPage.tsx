@@ -9,6 +9,7 @@ type Props = {
   room: Room;
   userId: string;
   firebaseBaseUri: string;
+  minecraftRoomUrl: string;
   minecraftMaxDistance: number;
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
@@ -44,6 +45,7 @@ export const RoomPage = ({
   room,
   userId,
   firebaseBaseUri,
+  minecraftRoomUrl,
   minecraftMaxDistance,
   voiceStatus,
   localMicLevel,
@@ -96,6 +98,7 @@ export const RoomPage = ({
   const normalizedBase = firebaseBaseUri.trim().endsWith("/") ? firebaseBaseUri.trim() : `${firebaseBaseUri.trim()}/`;
   const minecraftEndpoint = `${normalizedBase}minecraft.json`;
   const envirovoiceEndpoint = `${normalizedBase}envirovoice.json`;
+  const roomUrlLabel = minecraftRoomUrl.trim() || "Esperando roomUrl de Minecraft";
   const micStatusText =
     voiceStatus === "ready"
       ? "Voz activa"
@@ -215,6 +218,7 @@ export const RoomPage = ({
 
             <section className="admin-panel" aria-label="Panel admin">
               <small className="section-kicker">ADMIN PANEL</small>
+              <p>Room URL: {roomUrlLabel}</p>
               <p>URI base: {normalizedBase}</p>
               <p>Datos del mundo: {minecraftEndpoint}</p>
               <p>Sync de voz: {envirovoiceEndpoint}</p>

@@ -159,6 +159,7 @@ export const App = () => {
           room={currentRoom}
           userId={session.id}
           voiceStatus={voiceStatus}
+          minecraftRoomUrl={minecraftRoomUrl}
           minecraftMaxDistance={minecraftMaxDistance}
           localMicLevel={localMicLevel}
           availableMicrophones={availableMicrophones}
