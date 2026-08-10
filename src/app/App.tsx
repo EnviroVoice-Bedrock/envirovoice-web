@@ -7,6 +7,7 @@ import { fetchMinecraftWorldState, syncFirebaseVoiceState } from "../services/ap
 import { useAppStore } from "../stores/useAppStore";
 
 const DEFAULT_ROOM = "minecraft-global";
+const MINECRAFT_POLL_INTERVAL_MS = 250;
 
 export const App = () => {
   const [firebaseBaseUri, setFirebaseBaseUri] = useState("");
@@ -88,8 +89,15 @@ export const App = () => {
     }
 
     let cancelled = false;
+    let polling = false;
 
     const pollMinecraft = async (): Promise<void> => {
+      if (polling) {
+        return;
+      }
+
+      polling = true;
+
       try {
         const worldState = await fetchMinecraftWorldState({ baseUri: firebaseBaseUri });
         if (!cancelled) {
@@ -110,20 +118,6 @@ export const App = () => {
             }
           }
 
-          if (currentRoom) {
-            for (const player of worldState.players) {
-              const matchedUser = currentRoom.users.find((user) => normalizeName(user.name) === normalizeName(player.name));
-              if (!matchedUser || matchedUser.id === session.id) {
-                continue;
-              }
-
-              if (typeof player.microphoneVolume === "number") {
-                const nextVolume = Math.max(0, Math.min(1, player.microphoneVolume / 100));
-                setPeerVolume(matchedUser.id, nextVolume);
-              }
-            }
-          }
-
           if (errorMessage?.includes("Esperando coordenadas de Minecraft")) {
             const normalizedSelfName = session?.name.trim().toLowerCase() ?? "";
             const hasSelfPosition = worldState.players.some((player) => player.name.trim().toLowerCase() === normalizedSelfName);
@@ -134,13 +128,15 @@ export const App = () => {
         }
       } catch {
         // Ignore transient polling errors to avoid spamming user-facing alerts.
+      } finally {
+        polling = false;
       }
     };
 
     void pollMinecraft();
     const timer = window.setInterval(() => {
       void pollMinecraft();
-    }, 1000);
+    }, MINECRAFT_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
