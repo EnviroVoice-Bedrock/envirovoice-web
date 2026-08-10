@@ -156,12 +156,6 @@ export class WebRtcService {
       return this.localStream;
     }
 
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const hasMicrophone = devices.some((device) => device.kind === "audioinput");
-    if (!hasMicrophone) {
-      throw new DOMException("No microphone detected", "NotFoundError");
-    }
-
     if (forceRestart && this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
@@ -181,6 +175,10 @@ export class WebRtcService {
         : true,
       video: false
     });
+
+    if (!inputStream.getAudioTracks().length) {
+      throw new DOMException("No microphone detected", "NotFoundError");
+    }
 
     this.localInputStream = inputStream;
 

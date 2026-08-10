@@ -9,6 +9,22 @@ const defaultPosition = {
   dimension: "overworld" as const
 };
 
+const dedupeUsers = (users: RoomUser[]): RoomUser[] => {
+  const seen = new Set<string>();
+  const result: RoomUser[] = [];
+
+  for (const user of users) {
+    if (seen.has(user.id)) {
+      continue;
+    }
+
+    seen.add(user.id);
+    result.push(user);
+  }
+
+  return result;
+};
+
 export class RoomService {
   private readonly rooms = new Map<string, Room>();
 
@@ -32,11 +48,22 @@ export class RoomService {
   }
 
   listRooms(): Room[] {
-    return [...this.rooms.values()];
+    return [...this.rooms.values()].map((room) => ({
+      ...room,
+      users: dedupeUsers(room.users)
+    }));
   }
 
   getRoom(roomId: string): Room | undefined {
-    return this.rooms.get(roomId);
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      return undefined;
+    }
+
+    return {
+      ...room,
+      users: dedupeUsers(room.users)
+    };
   }
 
   createRoom(name: string, ownerId: string, ownerName: string): Room {
@@ -75,7 +102,7 @@ export class RoomService {
       id: roomId,
       name,
       ownerId,
-      users: [owner],
+      users: dedupeUsers([owner]),
       maxUsers: env.maxRoomUsers
     };
 
@@ -106,6 +133,8 @@ export class RoomService {
       position: defaultPosition
     });
 
+    room.users = dedupeUsers(room.users);
+
     return room;
   }
 
@@ -116,6 +145,7 @@ export class RoomService {
     }
 
     room.users = room.users.filter((user) => user.id !== userId);
+    room.users = dedupeUsers(room.users);
 
     if (!room.users.length) {
       this.rooms.delete(roomId);
