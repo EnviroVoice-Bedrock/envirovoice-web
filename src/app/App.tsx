@@ -41,6 +41,8 @@ export const App = () => {
   const {
     session,
     currentRoom,
+    connectionStatus,
+    peerStates,
     voiceMode,
     voiceStatus,
     localMicLevel,
@@ -50,6 +52,9 @@ export const App = () => {
     selectedMicrophoneId,
     availableOutputDevices,
     selectedOutputDeviceId,
+    debugPeerInfo,
+    debugLastPlaybackError,
+    debugLastOutputDeviceError,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
@@ -61,6 +66,7 @@ export const App = () => {
     connectToRoomByName,
     startVoice,
     refreshMicrophones,
+    refreshDiagnostics,
     setMicrophone,
     setOutputDevice,
     setMicSensitivity,
@@ -134,6 +140,21 @@ export const App = () => {
     };
   }, [session, currentRoom, deafenedUsers]);
 
+  useEffect(() => {
+    if (!session || !currentRoom) {
+      return;
+    }
+
+    refreshDiagnostics();
+    const timer = window.setInterval(() => {
+      refreshDiagnostics();
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [session, currentRoom, refreshDiagnostics]);
+
   return (
     <MainLayout>
       {errorMessage && (
@@ -157,6 +178,11 @@ export const App = () => {
           selectedMicrophoneId={selectedMicrophoneId}
           availableOutputDevices={availableOutputDevices}
           selectedOutputDeviceId={selectedOutputDeviceId}
+          connectionStatus={connectionStatus}
+          peerStates={peerStates}
+          debugPeerInfo={debugPeerInfo}
+          debugLastPlaybackError={debugLastPlaybackError}
+          debugLastOutputDeviceError={debugLastOutputDeviceError}
           selfMuted={isSelfMuted}
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}

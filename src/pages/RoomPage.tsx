@@ -8,6 +8,19 @@ import { useState } from "react";
 type Props = {
   room: Room;
   userId: string;
+  connectionStatus: "connecting" | "connected" | "disconnected" | "reconnecting";
+  peerStates: Record<string, RTCPeerConnectionState>;
+  debugPeerInfo: Record<
+    string,
+    {
+      connectionState: RTCPeerConnectionState | "closed";
+      signalingState: RTCSignalingState | "closed";
+      audioSenders: number;
+      audioReceivers: number;
+    }
+  >;
+  debugLastPlaybackError: string | null;
+  debugLastOutputDeviceError: string | null;
   voiceMode: "call" | "minecraft";
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
@@ -45,6 +58,11 @@ const getDistance = (x1: number, y1: number, z1: number, x2: number, y2: number,
 export const RoomPage = ({
   room,
   userId,
+  connectionStatus,
+  peerStates,
+  debugPeerInfo,
+  debugLastPlaybackError,
+  debugLastOutputDeviceError,
   voiceMode,
   voiceStatus,
   localMicLevel,
@@ -86,6 +104,7 @@ export const RoomPage = ({
     });
 
   const visibleUsers = selfUser ? [selfUser, ...nearbyUsers] : room.users;
+  const debugPeerEntries = Object.entries(debugPeerInfo);
 
   const micStatusText =
     voiceStatus === "ready"
@@ -205,6 +224,29 @@ export const RoomPage = ({
             <button type="button" className="button-secondary" onClick={() => void onStartVoice()}>
               {voiceStatus === "ready" ? "Reiniciar voz" : "Activar voz"}
             </button>
+
+            <div className="voice-debug-panel">
+              <small className="section-kicker">DEBUG VOICE</small>
+              <small>Signaling: {connectionStatus}</small>
+              <small>Peers activos: {Object.keys(peerStates).length}</small>
+              {debugLastPlaybackError && <small>audio.play: {debugLastPlaybackError}</small>}
+              {debugLastOutputDeviceError && <small>setSinkId: {debugLastOutputDeviceError}</small>}
+
+              {debugPeerEntries.length > 0 ? (
+                <ul className="voice-debug-list">
+                  {debugPeerEntries.map(([peerId, info]) => (
+                    <li key={peerId}>
+                      <strong>{peerId.slice(0, 8)}</strong>
+                      <small>
+                        conn: {info.connectionState} | signal: {info.signalingState} | tx: {info.audioSenders} | rx: {info.audioReceivers}
+                      </small>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <small>Sin peers conectados aun.</small>
+              )}
+            </div>
           </div>
         </aside>
       )}

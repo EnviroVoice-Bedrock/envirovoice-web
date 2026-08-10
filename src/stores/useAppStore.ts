@@ -23,6 +23,13 @@ type OutputDeviceOption = {
   label: string;
 };
 
+type PeerDebugInfo = {
+  connectionState: RTCPeerConnectionState | "closed";
+  signalingState: RTCSignalingState | "closed";
+  audioSenders: number;
+  audioReceivers: number;
+};
+
 type AppState = {
   session: UserSession | null;
   rooms: Room[];
@@ -40,6 +47,9 @@ type AppState = {
   selectedMicrophoneId: string | null;
   availableOutputDevices: OutputDeviceOption[];
   selectedOutputDeviceId: string | null;
+  debugPeerInfo: Record<string, PeerDebugInfo>;
+  debugLastPlaybackError: string | null;
+  debugLastOutputDeviceError: string | null;
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
   errorMessage: string | null;
@@ -53,6 +63,7 @@ type AppState = {
   joinRoom: (roomId: string) => Promise<void>;
   startVoice: () => Promise<void>;
   refreshMicrophones: () => Promise<void>;
+  refreshDiagnostics: () => void;
   setMicrophone: (deviceId: string | null) => Promise<void>;
   setOutputDevice: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
@@ -369,6 +380,9 @@ export const useAppStore = create<AppState>((set, get) => {
     selectedMicrophoneId: null,
     availableOutputDevices: [],
     selectedOutputDeviceId: null,
+    debugPeerInfo: {},
+    debugLastPlaybackError: null,
+    debugLastOutputDeviceError: null,
     deafenedUsers: {},
     peerVolumes: {},
     errorMessage: null,
@@ -464,6 +478,15 @@ export const useAppStore = create<AppState>((set, get) => {
       } catch (err) {
         logger.error("EnviroVoice", "Failed to enumerate microphones", err);
       }
+    },
+
+    refreshDiagnostics: () => {
+      const debug = webrtc.getDebugSnapshot();
+      set({
+        debugPeerInfo: debug.peers,
+        debugLastPlaybackError: debug.lastPlaybackError,
+        debugLastOutputDeviceError: debug.lastOutputDeviceError
+      });
     },
 
     setMicrophone: async (deviceId) => {
@@ -657,6 +680,9 @@ export const useAppStore = create<AppState>((set, get) => {
         localMicLevel: 0,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,
+        debugPeerInfo: {},
+        debugLastPlaybackError: null,
+        debugLastOutputDeviceError: null,
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null
@@ -739,6 +765,9 @@ export const useAppStore = create<AppState>((set, get) => {
         localMicLevel: 0,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,
+        debugPeerInfo: {},
+        debugLastPlaybackError: null,
+        debugLastOutputDeviceError: null,
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null
@@ -774,6 +803,9 @@ export const useAppStore = create<AppState>((set, get) => {
         selectedMicrophoneId: null,
         availableOutputDevices: [],
         selectedOutputDeviceId: null,
+        debugPeerInfo: {},
+        debugLastPlaybackError: null,
+        debugLastOutputDeviceError: null,
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null
