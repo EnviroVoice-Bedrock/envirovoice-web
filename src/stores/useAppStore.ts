@@ -769,7 +769,7 @@ export const useAppStore = create<AppState>((set, get) => {
         }));
       } catch (err) {
         logger.error("Rooms", "Failed to create room", err);
-        set({ errorMessage: "Connection failed" });
+        set({ errorMessage: err instanceof Error ? err.message : "Connection failed" });
       }
     },
 
@@ -792,7 +792,7 @@ export const useAppStore = create<AppState>((set, get) => {
         set({ currentRoom: room, errorMessage: null });
       } catch (err) {
         logger.error("Rooms", "Failed to join room", err);
-        set({ errorMessage: "Room full" });
+        set({ errorMessage: err instanceof Error ? err.message : "Room full" });
       }
     },
 
@@ -855,6 +855,7 @@ export const useAppStore = create<AppState>((set, get) => {
       webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
       webrtc.setMicrophoneEnabled(!isSelfMuted);
       await webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
+      await Promise.resolve();
       applyVoiceMix();
     },
 

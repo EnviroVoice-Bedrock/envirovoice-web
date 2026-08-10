@@ -67,7 +67,7 @@ const buildRtcConfiguration = (): RTCConfiguration => {
 
   const iceServers: RTCIceServer[] = [
     {
-      urls: ["stun:stun.l.google.com:19302"]
+      urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]
     }
   ];
 
@@ -79,7 +79,12 @@ const buildRtcConfiguration = (): RTCConfiguration => {
     });
   }
 
-  return { iceServers };
+  return {
+    iceServers,
+    bundlePolicy: "balanced",
+    iceTransportPolicy: "all",
+    rtcpMuxPolicy: "require"
+  };
 };
 
 const rtcConfiguration = buildRtcConfiguration();
@@ -95,6 +100,7 @@ export class WebRtcService {
   private readonly proximityMuteState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
   private readonly pendingIceCandidates = new Map<string, RTCIceCandidateInit[]>();
+  private readonly pendingNegotiations = new Set<string>();
   private localInputStream: MediaStream | null = null;
   private localStream: MediaStream | null = null;
   private localAudioContext: AudioContext | null = null;
@@ -494,6 +500,18 @@ export class WebRtcService {
     logger.log("EnviroVoice", "Queued ICE candidates applied", { peerId, count: queued.length });
   }
 
+  private queuePeerNegotiation(peerId: string): void {
+    if (this.pendingNegotiations.has(peerId)) {
+      return;
+    }
+
+    this.pendingNegotiations.add(peerId);
+    queueMicrotask(() => {
+      this.pendingNegotiations.delete(peerId);
+      void this.createOffer(peerId);
+    });
+  }
+
   private ensurePeer(peerId: string): RTCPeerConnection {
     const existing = this.peers.get(peerId);
     if (existing) {
@@ -521,6 +539,14 @@ export class WebRtcService {
           candidate: event.candidate.toJSON()
         }
       });
+    };
+
+    peer.onnegotiationneeded = () => {
+      if (!this.context) {
+        return;
+      }
+
+      this.queuePeerNegotiation(peerId);
     };
 
     peer.ontrack = (event) => {
@@ -586,13 +612,15 @@ export class WebRtcService {
   }
 
   private replaceLocalTrackOnPeers(track: MediaStreamTrack, stream: MediaStream): void {
-    for (const peer of this.peers.values()) {
+    for (const [peerId, peer] of this.peers.entries()) {
       const audioSender = peer.getSenders().find((sender) => sender.track?.kind === "audio");
       if (audioSender) {
         void audioSender.replaceTrack(track);
       } else {
         peer.addTrack(track, stream);
       }
+
+      this.queuePeerNegotiation(peerId);
     }
   }
 
