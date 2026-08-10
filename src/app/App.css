@@ -327,6 +327,7 @@ button:disabled {
 
 .room-console-shell {
   min-height: calc(100vh - 60px);
+  min-height: calc(100dvh - 60px);
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
@@ -379,6 +380,7 @@ button:disabled {
 .room-stage {
   padding: 22px;
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 .room-settings-popover {
@@ -405,6 +407,17 @@ button:disabled {
   padding: 14px 22px;
   background: rgba(12, 14, 18, 0.95);
   margin-top: auto;
+}
+
+@media (max-width: 980px) {
+  .room-bottom-dock {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .dock-actions {
+    justify-items: stretch;
+  }
 }
 
 .dock-block {
@@ -833,8 +846,10 @@ input[type="range"] {
   }
 
   .room-settings-popover {
+    top: 126px;
+    right: 12px;
     width: calc(100% - 24px);
-    margin: 0 12px 12px;
+    margin: 0;
   }
 
   .room-bottom-dock {

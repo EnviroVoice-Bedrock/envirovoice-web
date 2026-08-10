@@ -20,7 +20,6 @@ type Props = {
     }
   >;
   debugLastPlaybackError: string | null;
-  debugLastOutputDeviceError: string | null;
   voiceMode: "call" | "minecraft";
   voiceStatus: "idle" | "requesting" | "ready" | "denied" | "unavailable" | "failed";
   localMicLevel: number;
@@ -28,15 +27,12 @@ type Props = {
   monitorSelfVoice: boolean;
   availableMicrophones: Array<{ id: string; label: string }>;
   selectedMicrophoneId: string | null;
-  availableOutputDevices: Array<{ id: string; label: string }>;
-  selectedOutputDeviceId: string | null;
   selfMuted: boolean;
   selfDeafened: boolean;
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
   onRefreshMicrophones: () => Promise<void>;
   onSetMicrophone: (deviceId: string | null) => Promise<void>;
-  onSetOutputDevice: (deviceId: string | null) => Promise<void>;
   onSetMicSensitivity: (value: number) => void;
   onSetMonitorSelfVoice: (enabled: boolean) => void;
   onSetPeerVolume: (userId: string, volume: number) => void;
@@ -62,7 +58,6 @@ export const RoomPage = ({
   peerStates,
   debugPeerInfo,
   debugLastPlaybackError,
-  debugLastOutputDeviceError,
   voiceMode,
   voiceStatus,
   localMicLevel,
@@ -70,15 +65,12 @@ export const RoomPage = ({
   monitorSelfVoice,
   availableMicrophones,
   selectedMicrophoneId,
-  availableOutputDevices,
-  selectedOutputDeviceId,
   selfMuted,
   selfDeafened,
   deafenedUsers,
   peerVolumes,
   onRefreshMicrophones,
   onSetMicrophone,
-  onSetOutputDevice,
   onSetMicSensitivity,
   onSetMonitorSelfVoice,
   onSetPeerVolume,
@@ -189,16 +181,6 @@ export const RoomPage = ({
               </button>
             </div>
 
-            <label htmlFor="output-select">Salida de audio</label>
-            <select id="output-select" value={selectedOutputDeviceId ?? ""} onChange={(event) => void onSetOutputDevice(event.target.value || null)}>
-              {availableOutputDevices.length === 0 && <option value="">Salida por defecto del sistema</option>}
-              {availableOutputDevices.map((output) => (
-                <option key={output.id} value={output.id}>
-                  {output.label}
-                </option>
-              ))}
-            </select>
-
             <label htmlFor="sensitivity-range">Sensibilidad: {micSensitivity}%</label>
             <input
               id="sensitivity-range"
@@ -230,7 +212,6 @@ export const RoomPage = ({
               <small>Signaling: {connectionStatus}</small>
               <small>Peers activos: {Object.keys(peerStates).length}</small>
               {debugLastPlaybackError && <small>audio.play: {debugLastPlaybackError}</small>}
-              {debugLastOutputDeviceError && <small>setSinkId: {debugLastOutputDeviceError}</small>}
 
               {debugPeerEntries.length > 0 ? (
                 <ul className="voice-debug-list">
@@ -265,20 +246,6 @@ export const RoomPage = ({
               {availableMicrophones.map((mic) => (
                 <option key={mic.id} value={mic.id}>
                   {mic.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="dock-block dock-input">
-          <small>OUTPUT DEVICE</small>
-          <div className="dock-select-row">
-            <select value={selectedOutputDeviceId ?? ""} onChange={(event) => void onSetOutputDevice(event.target.value || null)}>
-              {availableOutputDevices.length === 0 && <option value="">Salida por defecto del sistema</option>}
-              {availableOutputDevices.map((output) => (
-                <option key={output.id} value={output.id}>
-                  {output.label}
                 </option>
               ))}
             </select>

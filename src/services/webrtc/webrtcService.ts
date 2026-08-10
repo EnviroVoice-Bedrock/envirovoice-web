@@ -39,10 +39,6 @@ type RoomContext = {
   selfId: string;
 };
 
-type SinkAudioElement = HTMLAudioElement & {
-  setSinkId?: (sinkId: string) => Promise<void>;
-};
-
 const buildRtcConfiguration = (): RTCConfiguration => {
   const turnUrl = import.meta.env.VITE_TURN_URL;
   const turnUsername = import.meta.env.VITE_TURN_USERNAME;
@@ -73,11 +69,6 @@ export class WebRtcService {
   private readonly audioElements = new Map<string, HTMLAudioElement>();
   private readonly deafenState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
-  private remoteAudioContext: AudioContext | null = null;
-  private readonly remoteSourceNodes = new Map<string, MediaStreamAudioSourceNode>();
-  private readonly remoteGainNodes = new Map<string, GainNode>();
-  private readonly remoteDestinations = new Map<string, MediaStreamAudioDestinationNode>();
-  private readonly amplifiedPeers = new Set<string>();
   private localInputStream: MediaStream | null = null;
   private localStream: MediaStream | null = null;
   private localAudioContext: AudioContext | null = null;
@@ -91,7 +82,6 @@ export class WebRtcService {
   private localSpeakingTimer: number | undefined;
   private lastSpeakingState = false;
   private selectedDeviceId: string | null = null;
-  private selectedOutputDeviceId: string | null = null;
   private speakingThreshold = 0.04;
   private monitorSelf = false;
   private noiseSuppressionEnabled = true;
@@ -99,11 +89,9 @@ export class WebRtcService {
   private readonly options: ServiceOptions;
   private readonly pendingPlaybackPeers = new Set<string>();
   private lastPlaybackError: string | null = null;
-  private lastOutputDeviceError: string | null = null;
   private unlockAudioHandlerAttached = false;
   private readonly unlockAudioHandler = () => {
     void this.ensureAudioContextRunning();
-    void this.ensureRemoteAudioContextRunning();
     void this.retryPendingRemoteAudio();
   };
 
@@ -117,13 +105,6 @@ export class WebRtcService {
 
   configureInput(deviceId: string | null): void {
     this.selectedDeviceId = deviceId;
-  }
-
-  setOutputDeviceId(deviceId: string | null): void {
-    this.selectedOutputDeviceId = deviceId;
-    for (const [peerId, audio] of this.audioElements.entries()) {
-      void this.applyOutputDevice(peerId, audio);
-    }
   }
 
   setSpeakingThreshold(threshold: number): void {
@@ -192,9 +173,18 @@ export class WebRtcService {
     const inputStream = await navigator.mediaDevices.getUserMedia({
       audio: this.selectedDeviceId
         ? {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
             deviceId: { exact: this.selectedDeviceId }
           }
-        : true,
+        : {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          },
       video: false
     });
 
@@ -308,23 +298,12 @@ export class WebRtcService {
   }
 
   setPeerVolume(peerId: string, volume: number): void {
-    const safeVolume = Math.max(0, Math.min(2, volume));
+    const safeVolume = Math.max(0, Math.min(1, volume));
     this.volumeState.set(peerId, safeVolume);
-
-    if (safeVolume > 1) {
-      this.enableAmplificationForPeer(peerId);
-    } else {
-      this.disableAmplificationForPeer(peerId);
-    }
-
-    const gainNode = this.remoteGainNodes.get(peerId);
-    if (gainNode) {
-      gainNode.gain.value = safeVolume;
-    }
 
     const audio = this.audioElements.get(peerId);
     if (audio) {
-      audio.volume = safeVolume > 1 ? 1 : safeVolume;
+      audio.volume = safeVolume;
     }
   }
 
@@ -346,7 +325,7 @@ export class WebRtcService {
     return {
       peers,
       lastPlaybackError: this.lastPlaybackError,
-      lastOutputDeviceError: this.lastOutputDeviceError
+      lastOutputDeviceError: null
     };
   }
 
@@ -366,26 +345,6 @@ export class WebRtcService {
       audio.srcObject = null;
       this.audioElements.delete(peerId);
     }
-
-    const sourceNode = this.remoteSourceNodes.get(peerId);
-    if (sourceNode) {
-      sourceNode.disconnect();
-      this.remoteSourceNodes.delete(peerId);
-    }
-
-    const gainNode = this.remoteGainNodes.get(peerId);
-    if (gainNode) {
-      gainNode.disconnect();
-      this.remoteGainNodes.delete(peerId);
-    }
-
-    const destination = this.remoteDestinations.get(peerId);
-    if (destination) {
-      destination.disconnect();
-      this.remoteDestinations.delete(peerId);
-    }
-
-    this.amplifiedPeers.delete(peerId);
 
     this.remoteStreams.delete(peerId);
     this.deafenState.delete(peerId);
@@ -423,16 +382,6 @@ export class WebRtcService {
       this.localAudioContext = null;
     }
 
-    if (this.remoteAudioContext) {
-      void this.remoteAudioContext.close();
-      this.remoteAudioContext = null;
-    }
-
-    this.remoteSourceNodes.clear();
-    this.remoteGainNodes.clear();
-    this.remoteDestinations.clear();
-    this.amplifiedPeers.clear();
-
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
@@ -446,7 +395,6 @@ export class WebRtcService {
     this.context = null;
     this.lastSpeakingState = false;
     this.lastPlaybackError = null;
-    this.lastOutputDeviceError = null;
     this.detachUnlockAudioHandlers();
   }
 
@@ -564,131 +512,12 @@ export class WebRtcService {
     audio.srcObject = stream;
     audio.muted = this.deafenState.get(peerId) ?? false;
     const volume = this.volumeState.get(peerId) ?? 1;
-    audio.volume = Math.min(1, volume);
-
-    if (volume > 1) {
-      this.enableAmplificationForPeer(peerId);
-    } else {
-      this.disableAmplificationForPeer(peerId);
-    }
-
-    void this.applyOutputDevice(peerId, audio);
+    audio.volume = volume;
     void this.tryPlayRemoteAudio(peerId, audio);
-  }
-
-  private enableAmplificationForPeer(peerId: string): void {
-    const stream = this.remoteStreams.get(peerId);
-    const audio = this.audioElements.get(peerId);
-    if (!stream || !audio) {
-      return;
-    }
-
-    const amplifiedStream = this.attachRemoteGainPipeline(peerId, stream);
-    this.amplifiedPeers.add(peerId);
-
-    if (audio.srcObject !== amplifiedStream) {
-      audio.srcObject = amplifiedStream;
-      void this.tryPlayRemoteAudio(peerId, audio);
-    }
-  }
-
-  private disableAmplificationForPeer(peerId: string): void {
-    const stream = this.remoteStreams.get(peerId);
-    const audio = this.audioElements.get(peerId);
-    if (!stream || !audio) {
-      return;
-    }
-
-    if (this.amplifiedPeers.has(peerId)) {
-      audio.srcObject = stream;
-      this.amplifiedPeers.delete(peerId);
-      void this.tryPlayRemoteAudio(peerId, audio);
-    }
-
-    const sourceNode = this.remoteSourceNodes.get(peerId);
-    if (sourceNode) {
-      sourceNode.disconnect();
-      this.remoteSourceNodes.delete(peerId);
-    }
-
-    const gainNode = this.remoteGainNodes.get(peerId);
-    if (gainNode) {
-      gainNode.disconnect();
-      this.remoteGainNodes.delete(peerId);
-    }
-
-    const destination = this.remoteDestinations.get(peerId);
-    if (destination) {
-      destination.disconnect();
-      this.remoteDestinations.delete(peerId);
-    }
-  }
-
-  private attachRemoteGainPipeline(peerId: string, stream: MediaStream): MediaStream {
-    const context = this.ensureRemoteAudioContext();
-    const existingSource = this.remoteSourceNodes.get(peerId);
-    if (existingSource) {
-      existingSource.disconnect();
-      this.remoteSourceNodes.delete(peerId);
-    }
-
-    const existingGain = this.remoteGainNodes.get(peerId);
-    if (existingGain) {
-      existingGain.disconnect();
-      this.remoteGainNodes.delete(peerId);
-    }
-
-    const existingDestination = this.remoteDestinations.get(peerId);
-    if (existingDestination) {
-      existingDestination.disconnect();
-      this.remoteDestinations.delete(peerId);
-    }
-
-    const sourceNode = context.createMediaStreamSource(stream);
-    const gainNode = context.createGain();
-    gainNode.gain.value = this.volumeState.get(peerId) ?? 1;
-
-    const destination = context.createMediaStreamDestination();
-    sourceNode.connect(gainNode);
-    gainNode.connect(destination);
-
-    this.remoteSourceNodes.set(peerId, sourceNode);
-    this.remoteGainNodes.set(peerId, gainNode);
-    this.remoteDestinations.set(peerId, destination);
-
-    void this.ensureRemoteAudioContextRunning();
-
-    return destination.stream;
-  }
-
-  private ensureRemoteAudioContext(): AudioContext {
-    if (!this.remoteAudioContext) {
-      this.remoteAudioContext = new AudioContext();
-    }
-
-    return this.remoteAudioContext;
-  }
-
-  private async applyOutputDevice(peerId: string, audio: HTMLAudioElement): Promise<void> {
-    const sinkAudio = audio as SinkAudioElement;
-    if (!sinkAudio.setSinkId) {
-      return;
-    }
-
-    const sinkId = this.selectedOutputDeviceId ?? "";
-
-    try {
-      await sinkAudio.setSinkId(sinkId);
-      this.lastOutputDeviceError = null;
-    } catch (err) {
-      this.lastOutputDeviceError = err instanceof Error ? err.message : "Failed to apply output device";
-      logger.error("EnviroVoice", "Failed to apply output device", { peerId, sinkId, err });
-    }
   }
 
   private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {
     try {
-      await this.ensureRemoteAudioContextRunning();
       await audio.play();
       this.lastPlaybackError = null;
       this.pendingPlaybackPeers.delete(peerId);
@@ -759,22 +588,6 @@ export class WebRtcService {
       await this.localAudioContext.resume();
     } catch (err) {
       logger.error("EnviroVoice", "Failed to resume local audio context", err);
-    }
-  }
-
-  private async ensureRemoteAudioContextRunning(): Promise<void> {
-    if (!this.remoteAudioContext) {
-      return;
-    }
-
-    if (this.remoteAudioContext.state === "running") {
-      return;
-    }
-
-    try {
-      await this.remoteAudioContext.resume();
-    } catch (err) {
-      logger.error("EnviroVoice", "Failed to resume remote audio context", err);
     }
   }
 

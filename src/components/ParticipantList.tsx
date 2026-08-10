@@ -36,7 +36,7 @@ export const ParticipantList = ({ users, currentUserId, deafenedUsers, peerVolum
                   <input
                     type="range"
                     min={0}
-                    max={200}
+                    max={100}
                     value={Math.round(volume * 100)}
                     onChange={(event) => onSetVolume(user.id, Number(event.target.value) / 100)}
                     aria-label={`Volumen de ${user.name}`}

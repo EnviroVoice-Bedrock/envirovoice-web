@@ -18,11 +18,6 @@ type MicrophoneOption = {
   label: string;
 };
 
-type OutputDeviceOption = {
-  id: string;
-  label: string;
-};
-
 type PeerDebugInfo = {
   connectionState: RTCPeerConnectionState | "closed";
   signalingState: RTCSignalingState | "closed";
@@ -45,11 +40,8 @@ type AppState = {
   monitorSelfVoice: boolean;
   availableMicrophones: MicrophoneOption[];
   selectedMicrophoneId: string | null;
-  availableOutputDevices: OutputDeviceOption[];
-  selectedOutputDeviceId: string | null;
   debugPeerInfo: Record<string, PeerDebugInfo>;
   debugLastPlaybackError: string | null;
-  debugLastOutputDeviceError: string | null;
   deafenedUsers: Record<string, boolean>;
   peerVolumes: Record<string, number>;
   errorMessage: string | null;
@@ -65,7 +57,6 @@ type AppState = {
   refreshMicrophones: () => Promise<void>;
   refreshDiagnostics: () => void;
   setMicrophone: (deviceId: string | null) => Promise<void>;
-  setOutputDevice: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
   setMonitorSelfVoice: (enabled: boolean) => void;
   setPeerVolume: (userId: string, volume: number) => void;
@@ -275,7 +266,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const manuallyDeafened = Boolean(deafenedUsers[user.id]) || isSelfDeafened;
       const baseVolume = voiceMode === "call" ? 1 : computeMinecraftVolume(selfUser, user);
       const personalVolume = peerVolumes[user.id] ?? 1;
-      const volume = Math.max(0, Math.min(2, baseVolume * personalVolume));
+      const volume = Math.max(0, Math.min(1, baseVolume * personalVolume));
 
       webrtc.setPeerDeafened(user.id, manuallyDeafened);
       webrtc.setPeerVolume(user.id, manuallyDeafened ? 0 : volume);
@@ -378,11 +369,8 @@ export const useAppStore = create<AppState>((set, get) => {
     monitorSelfVoice: false,
     availableMicrophones: [],
     selectedMicrophoneId: null,
-    availableOutputDevices: [],
-    selectedOutputDeviceId: null,
     debugPeerInfo: {},
     debugLastPlaybackError: null,
-    debugLastOutputDeviceError: null,
     deafenedUsers: {},
     peerVolumes: {},
     errorMessage: null,
@@ -430,9 +418,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!navigator.mediaDevices?.enumerateDevices) {
         set({
           availableMicrophones: [],
-          selectedMicrophoneId: null,
-          availableOutputDevices: [],
-          selectedOutputDeviceId: null
+          selectedMicrophoneId: null
         });
         return;
       }
@@ -446,13 +432,6 @@ export const useAppStore = create<AppState>((set, get) => {
             label: device.label || `Microfono ${index + 1}`
           }));
 
-        const outputs = devices
-          .filter((device) => device.kind === "audiooutput")
-          .map((device, index) => ({
-            id: device.deviceId,
-            label: device.label || `Salida ${index + 1}`
-          }));
-
         set((state) => {
           const selectedExists = state.selectedMicrophoneId
             ? microphones.some((mic) => mic.id === state.selectedMicrophoneId)
@@ -460,19 +439,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
           const nextSelectedId = selectedExists ? state.selectedMicrophoneId : (microphones[0]?.id ?? null);
 
-          const selectedOutputExists = state.selectedOutputDeviceId
-            ? outputs.some((output) => output.id === state.selectedOutputDeviceId)
-            : false;
-          const nextOutputId = selectedOutputExists ? state.selectedOutputDeviceId : (outputs[0]?.id ?? null);
-
           webrtc.configureInput(nextSelectedId);
-          webrtc.setOutputDeviceId(nextOutputId);
 
           return {
             availableMicrophones: microphones,
-            selectedMicrophoneId: nextSelectedId,
-            availableOutputDevices: outputs,
-            selectedOutputDeviceId: nextOutputId
+            selectedMicrophoneId: nextSelectedId
           };
         });
       } catch (err) {
@@ -484,8 +455,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const debug = webrtc.getDebugSnapshot();
       set({
         debugPeerInfo: debug.peers,
-        debugLastPlaybackError: debug.lastPlaybackError,
-        debugLastOutputDeviceError: debug.lastOutputDeviceError
+        debugLastPlaybackError: debug.lastPlaybackError
       });
     },
 
@@ -506,12 +476,6 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    setOutputDevice: async (deviceId) => {
-      const nextId = deviceId || null;
-      webrtc.setOutputDeviceId(nextId);
-      set({ selectedOutputDeviceId: nextId });
-    },
-
     setMicSensitivity: (value) => {
       const safeValue = Math.max(1, Math.min(100, Math.round(value)));
       const threshold = 0.02 + ((100 - safeValue) / 100) * 0.1;
@@ -525,7 +489,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     setPeerVolume: (userId, volume) => {
-      const safeVolume = Math.max(0, Math.min(2, volume));
+      const safeVolume = Math.max(0, Math.min(1, volume));
       set((state) => ({
         peerVolumes: {
           ...state.peerVolumes,
@@ -639,7 +603,11 @@ export const useAppStore = create<AppState>((set, get) => {
           const selfUser = currentRoom.users.find((user) => user.id === session.id);
           const hasData = Boolean(selfUser && hasMinecraftPosition(selfUser));
           if (!hasData) {
-            set({ errorMessage: "Modo Minecraft activo: esperando datos de posicion del addon" });
+            set({
+              voiceMode: "call",
+              errorMessage: "Sin datos del addon: se activo modo llamada para que puedas escuchar voz"
+            });
+            applyVoiceMix();
           }
         }
       } catch (err) {
@@ -678,11 +646,8 @@ export const useAppStore = create<AppState>((set, get) => {
         isSelfMuted: false,
         isSelfDeafened: false,
         localMicLevel: 0,
-        availableOutputDevices: [],
-        selectedOutputDeviceId: null,
         debugPeerInfo: {},
         debugLastPlaybackError: null,
-        debugLastOutputDeviceError: null,
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null
@@ -746,36 +711,38 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     logout: async () => {
-      const { currentRoom } = get();
-
-      if (currentRoom) {
-        await get().leaveRoom();
-      }
-
-      signaling.disconnect();
+      const { session, currentRoom } = get();
+      const roomId = currentRoom?.id;
+      const userId = session?.id;
 
       set({
         session: null,
         rooms: [],
         currentRoom: null,
+        connectionStatus: "disconnected",
         voiceStatus: "idle",
         peerStates: {},
         isSelfMuted: false,
         isSelfDeafened: false,
         localMicLevel: 0,
-        availableOutputDevices: [],
-        selectedOutputDeviceId: null,
         debugPeerInfo: {},
         debugLastPlaybackError: null,
-        debugLastOutputDeviceError: null,
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null
       });
 
       clearAllPeerRecoveryTimers();
-
       webrtc.reset();
+      signaling.disconnect();
+
+      if (roomId && userId) {
+        try {
+          await apiClient.leaveRoom(roomId, userId);
+        } catch (err) {
+          logger.error("Rooms", "Failed to leave room through API during logout", err);
+        }
+      }
     },
 
     resetForTesting: async () => {
@@ -801,11 +768,8 @@ export const useAppStore = create<AppState>((set, get) => {
         localMicLevel: 0,
         monitorSelfVoice: false,
         selectedMicrophoneId: null,
-        availableOutputDevices: [],
-        selectedOutputDeviceId: null,
         debugPeerInfo: {},
         debugLastPlaybackError: null,
-        debugLastOutputDeviceError: null,
         deafenedUsers: {},
         peerVolumes: {},
         errorMessage: null

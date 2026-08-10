@@ -50,11 +50,8 @@ export const App = () => {
     monitorSelfVoice,
     availableMicrophones,
     selectedMicrophoneId,
-    availableOutputDevices,
-    selectedOutputDeviceId,
     debugPeerInfo,
     debugLastPlaybackError,
-    debugLastOutputDeviceError,
     isSelfMuted,
     isSelfDeafened,
     deafenedUsers,
@@ -68,7 +65,6 @@ export const App = () => {
     refreshMicrophones,
     refreshDiagnostics,
     setMicrophone,
-    setOutputDevice,
     setMicSensitivity,
     setMonitorSelfVoice,
     setPeerVolume,
@@ -176,20 +172,16 @@ export const App = () => {
           monitorSelfVoice={monitorSelfVoice}
           availableMicrophones={availableMicrophones}
           selectedMicrophoneId={selectedMicrophoneId}
-          availableOutputDevices={availableOutputDevices}
-          selectedOutputDeviceId={selectedOutputDeviceId}
           connectionStatus={connectionStatus}
           peerStates={peerStates}
           debugPeerInfo={debugPeerInfo}
           debugLastPlaybackError={debugLastPlaybackError}
-          debugLastOutputDeviceError={debugLastOutputDeviceError}
           selfMuted={isSelfMuted}
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
           peerVolumes={peerVolumes}
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
-          onSetOutputDevice={setOutputDevice}
           onSetMicSensitivity={setMicSensitivity}
           onSetMonitorSelfVoice={setMonitorSelfVoice}
           onSetPeerVolume={setPeerVolume}
