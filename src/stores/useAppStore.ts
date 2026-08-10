@@ -19,6 +19,9 @@ type MicrophoneOption = {
   label: string;
 };
 
+type EnvironmentEffectKey = "underwater" | "buried" | "cave";
+type EnvironmentEffectsState = Record<EnvironmentEffectKey, boolean>;
+
 type PeerDebugInfo = {
   connectionState: RTCPeerConnectionState | "closed";
   signalingState: RTCSignalingState | "closed";
@@ -40,6 +43,8 @@ type AppState = {
   localMicLevel: number;
   monitorSelfVoice: boolean;
   minecraftMaxDistance: number;
+  minecraftPlayersSnapshot: MinecraftPlayerPosition[];
+  environmentEffects: EnvironmentEffectsState;
   availableMicrophones: MicrophoneOption[];
   selectedMicrophoneId: string | null;
   debugPeerInfo: Record<string, PeerDebugInfo>;
@@ -63,6 +68,7 @@ type AppState = {
   setMicrophone: (deviceId: string | null) => Promise<void>;
   setMicSensitivity: (value: number) => void;
   setMonitorSelfVoice: (enabled: boolean) => void;
+  setEnvironmentEffect: (effect: EnvironmentEffectKey, enabled: boolean) => void;
   setPeerVolume: (userId: string, volume: number) => void;
   leaveRoom: () => Promise<void>;
   setSelfMuted: (muted: boolean) => void;
@@ -140,6 +146,36 @@ const normalizeUserName = (name: string): string =>
     .replace(/[^a-z0-9_-]/g, "");
 
 const PROXIMITY_MAX_DISTANCE = 50;
+const ENVIRONMENT_EFFECT_PRIORITY: EnvironmentEffectKey[] = ["underwater", "buried", "cave"];
+
+const resolveEnvironmentEffect = (
+  player: MinecraftPlayerPosition | undefined,
+  environmentEffects: EnvironmentEffectsState
+): "none" | "underwater" | "buried" | "cave" => {
+  if (!player) {
+    return "none";
+  }
+
+  for (const effect of ENVIRONMENT_EFFECT_PRIORITY) {
+    if (!environmentEffects[effect]) {
+      continue;
+    }
+
+    if (effect === "underwater" && player.isUnderWater) {
+      return "underwater";
+    }
+
+    if (effect === "buried" && player.isBuried) {
+      return "buried";
+    }
+
+    if (effect === "cave" && player.isInCave) {
+      return "cave";
+    }
+  }
+
+  return "none";
+};
 
 const isAppleMobileBrowser = (): boolean => {
   if (typeof navigator === "undefined") {
@@ -308,7 +344,16 @@ export const useAppStore = create<AppState>((set, get) => {
   });
 
   const applyVoiceMix = (): void => {
-    const { currentRoom, session, minecraftMaxDistance, isSelfDeafened, deafenedUsers, peerVolumes } = get();
+    const {
+      currentRoom,
+      session,
+      minecraftMaxDistance,
+      isSelfDeafened,
+      deafenedUsers,
+      peerVolumes,
+      minecraftPlayersSnapshot,
+      environmentEffects
+    } = get();
     if (!currentRoom || !session) {
       return;
     }
@@ -317,6 +362,8 @@ export const useAppStore = create<AppState>((set, get) => {
     if (!selfUser) {
       return;
     }
+
+    const playersByName = new Map(minecraftPlayersSnapshot.map((player) => [normalizeUserName(player.name), player]));
 
     for (const user of currentRoom.users) {
       if (user.id === session.id) {
@@ -327,9 +374,12 @@ export const useAppStore = create<AppState>((set, get) => {
       const baseVolume = computeMinecraftVolume(selfUser, user, minecraftMaxDistance);
       const personalVolume = peerVolumes[user.id] ?? 1;
       const volume = Math.max(0, Math.min(1, baseVolume * personalVolume));
+      const playerProfile = playersByName.get(normalizeUserName(user.name));
+      const effect = resolveEnvironmentEffect(playerProfile, environmentEffects);
 
       webrtc.setPeerDeafened(user.id, manuallyDeafened);
       webrtc.setPeerVolume(user.id, manuallyDeafened ? 0 : volume);
+      webrtc.setPeerEnvironmentEffect(user.id, effect);
     }
   };
 
@@ -446,6 +496,12 @@ export const useAppStore = create<AppState>((set, get) => {
     localMicLevel: 0,
     monitorSelfVoice: false,
     minecraftMaxDistance: 50,
+    minecraftPlayersSnapshot: [],
+    environmentEffects: {
+      underwater: true,
+      buried: true,
+      cave: true
+    },
     availableMicrophones: [],
     selectedMicrophoneId: null,
     debugPeerInfo: {},
@@ -634,7 +690,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     applyMinecraftWorldState: (worldState) => {
-      set({ minecraftMaxDistance: worldState.maxDistance });
+      set({ minecraftMaxDistance: worldState.maxDistance, minecraftPlayersSnapshot: worldState.players });
       get().applyMinecraftPlayerPositions(worldState.players);
       applyVoiceMix();
     },
@@ -666,6 +722,16 @@ export const useAppStore = create<AppState>((set, get) => {
     setMonitorSelfVoice: (enabled) => {
       webrtc.setSelfMonitor(enabled);
       set({ monitorSelfVoice: enabled });
+    },
+
+    setEnvironmentEffect: (effect, enabled) => {
+      set((state) => ({
+        environmentEffects: {
+          ...state.environmentEffects,
+          [effect]: enabled
+        }
+      }));
+      applyVoiceMix();
     },
 
     setPeerVolume: (userId, volume) => {
@@ -829,6 +895,12 @@ export const useAppStore = create<AppState>((set, get) => {
         micSensitivity: 40,
         localMicLevel: 0,
         monitorSelfVoice: false,
+        minecraftPlayersSnapshot: [],
+        environmentEffects: {
+          underwater: true,
+          buried: true,
+          cave: true
+        },
         debugPeerInfo: {},
         debugLastPlaybackError: null,
         deafenedUsers: {},
@@ -911,6 +983,12 @@ export const useAppStore = create<AppState>((set, get) => {
         micSensitivity: 40,
         localMicLevel: 0,
         monitorSelfVoice: false,
+        minecraftPlayersSnapshot: [],
+        environmentEffects: {
+          underwater: true,
+          buried: true,
+          cave: true
+        },
         debugPeerInfo: {},
         debugLastPlaybackError: null,
         deafenedUsers: {},
@@ -955,6 +1033,12 @@ export const useAppStore = create<AppState>((set, get) => {
         micSensitivity: 40,
         localMicLevel: 0,
         monitorSelfVoice: false,
+        minecraftPlayersSnapshot: [],
+        environmentEffects: {
+          underwater: true,
+          buried: true,
+          cave: true
+        },
         selectedMicrophoneId: null,
         debugPeerInfo: {},
         debugLastPlaybackError: null,

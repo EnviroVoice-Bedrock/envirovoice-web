@@ -39,6 +39,25 @@ type RoomContext = {
   selfId: string;
 };
 
+export type RemoteEnvironmentEffect = "none" | "underwater" | "buried" | "cave";
+
+type RemotePeerProcessor = {
+  source: MediaElementAudioSourceNode;
+  masterGain: GainNode;
+  baseGain: GainNode;
+  underwaterLowPass: BiquadFilterNode;
+  underwaterPresence: BiquadFilterNode;
+  underwaterHighShelf: BiquadFilterNode;
+  underwaterGain: GainNode;
+  buriedLowPass: BiquadFilterNode;
+  buriedBand: BiquadFilterNode;
+  buriedGain: GainNode;
+  caveDelay: DelayNode;
+  caveFeedback: GainNode;
+  caveLowPass: BiquadFilterNode;
+  caveWetGain: GainNode;
+};
+
 const buildRtcConfiguration = (): RTCConfiguration => {
   const turnUrl = import.meta.env.VITE_TURN_URL;
   const turnUsername = import.meta.env.VITE_TURN_USERNAME;
@@ -67,13 +86,16 @@ export class WebRtcService {
   private readonly peers = new Map<string, RTCPeerConnection>();
   private readonly remoteStreams = new Map<string, MediaStream>();
   private readonly audioElements = new Map<string, HTMLAudioElement>();
+  private readonly remoteProcessors = new Map<string, RemotePeerProcessor>();
   private readonly deafenState = new Map<string, boolean>();
   private readonly proximityMuteState = new Map<string, boolean>();
   private readonly volumeState = new Map<string, number>();
+  private readonly peerEnvironmentState = new Map<string, RemoteEnvironmentEffect>();
   private readonly pendingIceCandidates = new Map<string, RTCIceCandidateInit[]>();
   private localInputStream: MediaStream | null = null;
   private localStream: MediaStream | null = null;
   private localAudioContext: AudioContext | null = null;
+  private remoteAudioContext: AudioContext | null = null;
   private localAnalyser: AnalyserNode | null = null;
   private localSourceNode: MediaStreamAudioSourceNode | null = null;
   private localDryGain: GainNode | null = null;
@@ -308,6 +330,11 @@ export class WebRtcService {
     this.applyPeerAudioState(peerId);
   }
 
+  setPeerEnvironmentEffect(peerId: string, effect: RemoteEnvironmentEffect): void {
+    this.peerEnvironmentState.set(peerId, effect);
+    this.applyPeerEnvironmentEffect(peerId);
+  }
+
   getDebugSnapshot(): WebRtcDebugSnapshot {
     const peers: Record<string, PeerDebugState> = {};
 
@@ -347,10 +374,30 @@ export class WebRtcService {
       this.audioElements.delete(peerId);
     }
 
+    const processor = this.remoteProcessors.get(peerId);
+    if (processor) {
+      processor.source.disconnect();
+      processor.masterGain.disconnect();
+      processor.baseGain.disconnect();
+      processor.underwaterLowPass.disconnect();
+      processor.underwaterPresence.disconnect();
+      processor.underwaterHighShelf.disconnect();
+      processor.underwaterGain.disconnect();
+      processor.buriedLowPass.disconnect();
+      processor.buriedBand.disconnect();
+      processor.buriedGain.disconnect();
+      processor.caveDelay.disconnect();
+      processor.caveFeedback.disconnect();
+      processor.caveLowPass.disconnect();
+      processor.caveWetGain.disconnect();
+      this.remoteProcessors.delete(peerId);
+    }
+
     this.remoteStreams.delete(peerId);
     this.deafenState.delete(peerId);
     this.proximityMuteState.delete(peerId);
     this.volumeState.delete(peerId);
+    this.peerEnvironmentState.delete(peerId);
     this.pendingIceCandidates.delete(peerId);
     this.pendingPlaybackPeers.delete(peerId);
   }
@@ -383,6 +430,11 @@ export class WebRtcService {
     if (this.localAudioContext) {
       void this.localAudioContext.close();
       this.localAudioContext = null;
+    }
+
+    if (this.remoteAudioContext) {
+      void this.remoteAudioContext.close();
+      this.remoteAudioContext = null;
     }
 
     if (this.localStream) {
@@ -529,24 +581,173 @@ export class WebRtcService {
     }
 
     audio.srcObject = stream;
+    audio.muted = true;
+    audio.volume = 1;
+    this.ensureRemoteProcessor(peerId, audio);
+    this.applyPeerEnvironmentEffect(peerId);
     this.applyPeerAudioState(peerId);
     void this.tryPlayRemoteAudio(peerId, audio);
   }
 
   private applyPeerAudioState(peerId: string): void {
+    const deafened = this.deafenState.get(peerId) ?? false;
+    const mutedByDistance = this.proximityMuteState.get(peerId) ?? false;
+    const volume = this.volumeState.get(peerId) ?? 1;
+    const targetGain = deafened || mutedByDistance ? 0 : volume;
+
+    const processor = this.remoteProcessors.get(peerId);
+    const context = this.remoteAudioContext;
+    if (processor && context) {
+      processor.masterGain.gain.setTargetAtTime(targetGain, context.currentTime, 0.02);
+      return;
+    }
+
     const audio = this.audioElements.get(peerId);
     if (!audio) {
       return;
     }
 
-    const deafened = this.deafenState.get(peerId) ?? false;
-    const mutedByDistance = this.proximityMuteState.get(peerId) ?? false;
-    const volume = this.volumeState.get(peerId) ?? 1;
-
-    // Mobile browsers can ignore HTMLAudioElement.volume changes.
-    // Force a hard mute when calculated distance volume reaches zero.
-    audio.muted = deafened || mutedByDistance;
+    audio.muted = targetGain <= 0.001;
     audio.volume = volume;
+  }
+
+  private applyPeerEnvironmentEffect(peerId: string): void {
+    const processor = this.remoteProcessors.get(peerId);
+    const context = this.remoteAudioContext;
+    if (!processor || !context) {
+      return;
+    }
+
+    const effect = this.peerEnvironmentState.get(peerId) ?? "none";
+
+    let baseGain = 1;
+    let underwaterGain = 0;
+    let buriedGain = 0;
+    let caveWetGain = 0;
+
+    if (effect === "underwater") {
+      baseGain = 0;
+      underwaterGain = 1;
+    } else if (effect === "buried") {
+      baseGain = 0;
+      buriedGain = 1;
+    } else if (effect === "cave") {
+      baseGain = 0.82;
+      caveWetGain = 0.52;
+    }
+
+    processor.baseGain.gain.setTargetAtTime(baseGain, context.currentTime, 0.04);
+    processor.underwaterGain.gain.setTargetAtTime(underwaterGain, context.currentTime, 0.05);
+    processor.buriedGain.gain.setTargetAtTime(buriedGain, context.currentTime, 0.05);
+    processor.caveWetGain.gain.setTargetAtTime(caveWetGain, context.currentTime, 0.06);
+  }
+
+  private ensureRemoteAudioContext(): AudioContext {
+    if (!this.remoteAudioContext) {
+      this.remoteAudioContext = new AudioContext();
+    }
+
+    void this.ensureAudioContextRunning();
+    this.attachUnlockAudioHandlers();
+    return this.remoteAudioContext;
+  }
+
+  private ensureRemoteProcessor(peerId: string, audio: HTMLAudioElement): void {
+    if (this.remoteProcessors.has(peerId)) {
+      return;
+    }
+
+    const audioContext = this.ensureRemoteAudioContext();
+    const source = audioContext.createMediaElementSource(audio);
+    const masterGain = audioContext.createGain();
+    const baseGain = audioContext.createGain();
+
+    const underwaterLowPass = audioContext.createBiquadFilter();
+    underwaterLowPass.type = "lowpass";
+    underwaterLowPass.frequency.value = 560;
+    underwaterLowPass.Q.value = 1.14;
+
+    const underwaterPresence = audioContext.createBiquadFilter();
+    underwaterPresence.type = "peaking";
+    underwaterPresence.frequency.value = 380;
+    underwaterPresence.Q.value = 1.3;
+    underwaterPresence.gain.value = 3;
+
+    const underwaterHighShelf = audioContext.createBiquadFilter();
+    underwaterHighShelf.type = "highshelf";
+    underwaterHighShelf.frequency.value = 1200;
+    underwaterHighShelf.gain.value = -14;
+
+    const underwaterGain = audioContext.createGain();
+    underwaterGain.gain.value = 0;
+
+    const buriedLowPass = audioContext.createBiquadFilter();
+    buriedLowPass.type = "lowpass";
+    buriedLowPass.frequency.value = 280;
+    buriedLowPass.Q.value = 0.94;
+
+    const buriedBand = audioContext.createBiquadFilter();
+    buriedBand.type = "peaking";
+    buriedBand.frequency.value = 180;
+    buriedBand.Q.value = 1.1;
+    buriedBand.gain.value = 7;
+
+    const buriedGain = audioContext.createGain();
+    buriedGain.gain.value = 0;
+
+    const caveDelay = audioContext.createDelay(1.0);
+    caveDelay.delayTime.value = 0.23;
+
+    const caveFeedback = audioContext.createGain();
+    caveFeedback.gain.value = 0.37;
+
+    const caveLowPass = audioContext.createBiquadFilter();
+    caveLowPass.type = "lowpass";
+    caveLowPass.frequency.value = 3000;
+    caveLowPass.Q.value = 0.8;
+
+    const caveWetGain = audioContext.createGain();
+    caveWetGain.gain.value = 0;
+
+    source.connect(baseGain);
+    baseGain.connect(masterGain);
+
+    source.connect(underwaterLowPass);
+    underwaterLowPass.connect(underwaterPresence);
+    underwaterPresence.connect(underwaterHighShelf);
+    underwaterHighShelf.connect(underwaterGain);
+    underwaterGain.connect(masterGain);
+
+    source.connect(buriedLowPass);
+    buriedLowPass.connect(buriedBand);
+    buriedBand.connect(buriedGain);
+    buriedGain.connect(masterGain);
+
+    source.connect(caveDelay);
+    caveDelay.connect(caveLowPass);
+    caveLowPass.connect(caveWetGain);
+    caveWetGain.connect(masterGain);
+    caveDelay.connect(caveFeedback);
+    caveFeedback.connect(caveDelay);
+
+    masterGain.connect(audioContext.destination);
+
+    this.remoteProcessors.set(peerId, {
+      source,
+      masterGain,
+      baseGain,
+      underwaterLowPass,
+      underwaterPresence,
+      underwaterHighShelf,
+      underwaterGain,
+      buriedLowPass,
+      buriedBand,
+      buriedGain,
+      caveDelay,
+      caveFeedback,
+      caveLowPass,
+      caveWetGain
+    });
   }
 
   private async tryPlayRemoteAudio(peerId: string, audio: HTMLAudioElement): Promise<void> {
@@ -609,18 +810,25 @@ export class WebRtcService {
   }
 
   private async ensureAudioContextRunning(): Promise<void> {
-    if (!this.localAudioContext) {
-      return;
+    const contexts: AudioContext[] = [];
+    if (this.localAudioContext) {
+      contexts.push(this.localAudioContext);
     }
 
-    if (this.localAudioContext.state === "running") {
-      return;
+    if (this.remoteAudioContext) {
+      contexts.push(this.remoteAudioContext);
     }
 
-    try {
-      await this.localAudioContext.resume();
-    } catch (err) {
-      logger.error("EnviroVoice", "Failed to resume local audio context", err);
+    for (const context of contexts) {
+      if (context.state === "running") {
+        continue;
+      }
+
+      try {
+        await context.resume();
+      } catch (err) {
+        logger.error("EnviroVoice", "Failed to resume audio context", err);
+      }
     }
   }
 

@@ -38,6 +38,16 @@ export const ParticipantList = ({ users, currentUserId, minecraftPlayers, deafen
             </div>
             <div className="participant-info">
               <strong>{user.name}</strong>
+              <div className={`participant-voice-activity ${isVoiceActive ? "participant-voice-activity-live" : "participant-voice-activity-idle"}`}>
+                <span className={isVoiceActive ? "participant-speaking-text" : "participant-silent-text"}>{isVoiceActive ? "Hablando" : "En silencio"}</span>
+                {isVoiceActive && (
+                  <span className="voice-bars" aria-hidden>
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                )}
+              </div>
               <small className="participant-minecraft-state">
                 {minecraftMuted ? "Muteado en Minecraft" : minecraftDeafened ? "Ensordecido en Minecraft" : `Minecraft vol ${minecraftProfile?.microphoneVolume ?? 100}%`}
               </small>

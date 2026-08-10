@@ -39,6 +39,10 @@ export type MinecraftPlayerPosition = {
   dimension: "overworld" | "nether" | "end";
   isMuted?: boolean;
   isDeafen?: boolean;
+  isUnderWater?: boolean;
+  isBuried?: boolean;
+  isInCave?: boolean;
+  isInMountain?: boolean;
   microphoneVolume?: number;
 };
 
@@ -189,6 +193,10 @@ const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPo
   const microphoneVolume = toNumber(candidate.microphoneVolume);
   const isMuted = toBoolean(candidate.isMuted);
   const isDeafen = toBoolean(candidate.isDeafen);
+  const isUnderWater = toBoolean(candidate.isUnderWater ?? candidate.isUnderwater);
+  const isBuried = toBoolean(candidate.isBuried);
+  const isInCave = toBoolean(candidate.isInCave ?? candidate.IsinCave);
+  const isInMountain = toBoolean(candidate.isInMountain ?? candidate.IsinMountain);
 
   return {
     name,
@@ -198,7 +206,11 @@ const tryExtractPosition = (value: unknown, keyHint?: string): MinecraftPlayerPo
     dimension,
     microphoneVolume: microphoneVolume == null ? undefined : microphoneVolume,
     isMuted: isMuted ?? undefined,
-    isDeafen: isDeafen ?? undefined
+    isDeafen: isDeafen ?? undefined,
+    isUnderWater: isUnderWater ?? undefined,
+    isBuried: isBuried ?? undefined,
+    isInCave: isInCave ?? undefined,
+    isInMountain: isInMountain ?? undefined
   };
 };
 
@@ -330,17 +342,49 @@ const extractRoomUrl = (snapshot: MinecraftSnapshot): string => {
     return "";
   }
 
-  const server = (snapshot as Record<string, unknown>).server;
-  if (!server || typeof server !== "object") {
+  const normalizeRoomName = (value: unknown): string => {
+    if (typeof value !== "string") {
+      return "";
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "";
+    }
+
+    const withoutQuery = trimmed.split("?")[0] ?? trimmed;
+    const slashSeparated = withoutQuery.split("/").filter(Boolean);
+    const candidate = slashSeparated.length > 0 ? slashSeparated[slashSeparated.length - 1] : withoutQuery;
+    return candidate.replace(/\.json$/i, "").trim();
+  };
+
+  const pickFromObject = (record: Record<string, unknown>): string => {
+    const keys = ["roomUrl", "roomURL", "roomName", "room", "roomId", "voiceRoom", "url"];
+    for (const key of keys) {
+      const normalized = normalizeRoomName(record[key]);
+      if (normalized) {
+        return normalized;
+      }
+    }
+
     return "";
+  };
+
+  const root = snapshot as Record<string, unknown>;
+
+  const fromServer = root.server && typeof root.server === "object"
+    ? pickFromObject(root.server as Record<string, unknown>)
+    : "";
+  if (fromServer) {
+    return fromServer;
   }
 
-  const value = (server as Record<string, unknown>).roomUrl;
-  if (typeof value !== "string") {
-    return "";
+  const fromRoot = pickFromObject(root);
+  if (fromRoot) {
+    return fromRoot;
   }
 
-  return value.trim();
+  return "";
 };
 
 export const fetchMinecraftPlayerPositions = async (options?: { baseUri?: string }): Promise<MinecraftPlayerPosition[]> => {
