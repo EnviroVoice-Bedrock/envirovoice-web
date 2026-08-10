@@ -102,7 +102,12 @@ const hasMinecraftPosition = (user: RoomUser): boolean => {
   return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
 };
 
-const normalizeUserName = (name: string): string => name.trim().toLowerCase();
+const normalizeUserName = (name: string): string =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/§[0-9a-fk-or]/gi, "")
+    .replace(/[^a-z0-9_-]/g, "");
 
 const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDistance: number): number => {
   if (!hasMinecraftPosition(selfUser) || !hasMinecraftPosition(otherUser)) {
@@ -480,7 +485,20 @@ export const useAppStore = create<AppState>((set, get) => {
 
         let changed = false;
         const users = state.currentRoom.users.map((user) => {
-          const match = byName.get(normalizeUserName(user.name));
+          const normalizedUserName = normalizeUserName(user.name);
+          let match = byName.get(normalizedUserName);
+
+          if (!match) {
+            // Fallback for slight naming mismatches between login and Minecraft addon payload.
+            match = players.find((player) => {
+              const normalizedPlayerName = normalizeUserName(player.name);
+              return (
+                normalizedPlayerName.includes(normalizedUserName) ||
+                normalizedUserName.includes(normalizedPlayerName)
+              );
+            });
+          }
+
           if (!match) {
             return user;
           }
@@ -510,11 +528,18 @@ export const useAppStore = create<AppState>((set, get) => {
           return state;
         }
 
+        const sessionId = state.session?.id;
+        const selfUser = sessionId ? users.find((user) => user.id === sessionId) : null;
+        const hasSelfData = Boolean(selfUser && hasMinecraftPosition(selfUser));
+        const waitingError =
+          typeof state.errorMessage === "string" && state.errorMessage.includes("Esperando coordenadas de Minecraft");
+
         return {
           currentRoom: {
             ...state.currentRoom,
             users
-          }
+          },
+          errorMessage: hasSelfData && waitingError ? null : state.errorMessage
         };
       });
 
@@ -666,10 +691,17 @@ export const useAppStore = create<AppState>((set, get) => {
         await webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
         applyVoiceMix();
 
-        const selfUser = currentRoom.users.find((user) => user.id === session.id);
+        const latestRoom = get().currentRoom;
+        const selfUser = latestRoom?.users.find((user) => user.id === session.id);
         const hasData = Boolean(selfUser && hasMinecraftPosition(selfUser));
         if (!hasData) {
           set({ errorMessage: "Esperando coordenadas de Minecraft para activar voz por proximidad" });
+        } else {
+          set((state) => {
+            const waitingError =
+              typeof state.errorMessage === "string" && state.errorMessage.includes("Esperando coordenadas de Minecraft");
+            return waitingError ? { errorMessage: null } : state;
+          });
         }
       } catch (err) {
         logger.error("EnviroVoice", "Microphone setup failed", err);

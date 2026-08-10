@@ -1,6 +1,8 @@
 const withDefault = (value: string | undefined, key: string, fallback: string): string => {
   if (!value) {
-    console.warn(`[EnviroVoice] Missing environment variable: ${key}. Using default: ${fallback}`);
+    if (import.meta.env.DEV) {
+      console.warn(`[EnviroVoice] Missing environment variable: ${key}. Using default: ${fallback}`);
+    }
     return fallback;
   }
 
