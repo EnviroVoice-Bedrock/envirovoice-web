@@ -9,27 +9,62 @@ const defaultPosition = {
   dimension: "overworld" as const
 };
 
-const dedupeUsers = (users: RoomUser[]): RoomUser[] => {
-  const seen = new Set<string>();
-  const result: RoomUser[] = [];
-
-  for (const user of users) {
-    if (seen.has(user.id)) {
-      continue;
-    }
-
-    seen.add(user.id);
-    result.push(user);
-  }
-
-  return result;
-};
-
 export class RoomService {
   private readonly rooms = new Map<string, Room>();
 
   private static normalizeRoomName(name: string): string {
     return name.trim().toLowerCase();
+  }
+
+  private static normalizeUserName(name: string): string {
+    return name.trim().toLowerCase();
+  }
+
+  private dedupeRoomUsers(room: Room): void {
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+    room.users = room.users.filter((user) => {
+      const normalizedName = RoomService.normalizeUserName(user.name);
+      if (seenIds.has(user.id) || seenNames.has(normalizedName)) {
+        return false;
+      }
+
+      seenIds.add(user.id);
+      seenNames.add(normalizedName);
+      return true;
+    });
+  }
+
+  private upsertRoomUser(room: Room, userId: string, userName: string): void {
+    const byId = room.users.find((user) => user.id === userId);
+    if (byId) {
+      return;
+    }
+
+    const normalizedName = RoomService.normalizeUserName(userName);
+    const byNameIndex = room.users.findIndex((user) => RoomService.normalizeUserName(user.name) === normalizedName);
+    if (byNameIndex !== -1) {
+      room.users[byNameIndex] = {
+        id: userId,
+        name: userName,
+        muted: false,
+        speaking: false,
+        position: defaultPosition
+      };
+      return;
+    }
+
+    if (room.users.length >= room.maxUsers) {
+      throw new Error("Room full");
+    }
+
+    room.users.push({
+      id: userId,
+      name: userName,
+      muted: false,
+      speaking: false,
+      position: defaultPosition
+    });
   }
 
   private findRoomByName(name: string): Room | undefined {
@@ -48,43 +83,19 @@ export class RoomService {
   }
 
   listRooms(): Room[] {
-    return [...this.rooms.values()].map((room) => ({
-      ...room,
-      users: dedupeUsers(room.users)
-    }));
+    return [...this.rooms.values()];
   }
 
   getRoom(roomId: string): Room | undefined {
-    const room = this.rooms.get(roomId);
-    if (!room) {
-      return undefined;
-    }
-
-    return {
-      ...room,
-      users: dedupeUsers(room.users)
-    };
+    return this.rooms.get(roomId);
   }
 
   createRoom(name: string, ownerId: string, ownerName: string): Room {
     const existing = this.findRoomByName(name);
     if (existing) {
-      const alreadyJoined = existing.users.some((user) => user.id === ownerId);
-      if (alreadyJoined) {
-        return existing;
-      }
-
-      if (existing.users.length >= existing.maxUsers) {
-        throw new Error("Room full");
-      }
-
-      existing.users.push({
-        id: ownerId,
-        name: ownerName,
-        muted: false,
-        speaking: false,
-        position: defaultPosition
-      });
+      this.dedupeRoomUsers(existing);
+      this.upsertRoomUser(existing, ownerId, ownerName);
+      existing.ownerId = ownerId;
 
       return existing;
     }
@@ -102,7 +113,7 @@ export class RoomService {
       id: roomId,
       name,
       ownerId,
-      users: dedupeUsers([owner]),
+      users: [owner],
       maxUsers: env.maxRoomUsers
     };
 
@@ -116,24 +127,8 @@ export class RoomService {
       throw new Error("Room not found");
     }
 
-    const existing = room.users.find((user) => user.id === userId);
-    if (existing) {
-      return room;
-    }
-
-    if (room.users.length >= room.maxUsers) {
-      throw new Error("Room full");
-    }
-
-    room.users.push({
-      id: userId,
-      name: userName,
-      muted: false,
-      speaking: false,
-      position: defaultPosition
-    });
-
-    room.users = dedupeUsers(room.users);
+    this.dedupeRoomUsers(room);
+    this.upsertRoomUser(room, userId, userName);
 
     return room;
   }
@@ -145,7 +140,6 @@ export class RoomService {
     }
 
     room.users = room.users.filter((user) => user.id !== userId);
-    room.users = dedupeUsers(room.users);
 
     if (!room.users.length) {
       this.rooms.delete(roomId);
