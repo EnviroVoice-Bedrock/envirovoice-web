@@ -39,6 +39,7 @@ export const App = () => {
     setSelfMuted,
     setSelfDeafened,
     toggleUserDeafen,
+    leaveRoom,
     logout,
     resetForTesting,
     clearError
@@ -74,6 +75,23 @@ export const App = () => {
 
     void connectToRoomByName(minecraftRoomUrl.trim() || fallbackRoomName);
   }, [session, currentRoom, minecraftRoomUrl, fallbackRoomName, connectToRoomByName]);
+
+  useEffect(() => {
+    if (!session || !currentRoom) {
+      return;
+    }
+
+    const targetRoomName = minecraftRoomUrl.trim();
+    if (!targetRoomName) {
+      return;
+    }
+
+    if (currentRoom.name.trim().toLowerCase() === targetRoomName.toLowerCase()) {
+      return;
+    }
+
+    void leaveRoom();
+  }, [session, currentRoom, minecraftRoomUrl, leaveRoom]);
 
   useEffect(() => {
     if (!session || !currentRoom || voiceStatus !== "idle") {

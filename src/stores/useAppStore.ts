@@ -512,18 +512,7 @@ export const useAppStore = create<AppState>((set, get) => {
         let changed = false;
         const users = state.currentRoom.users.map((user) => {
           const normalizedUserName = normalizeUserName(user.name);
-          let match = byName.get(normalizedUserName);
-
-          if (!match) {
-            // Fallback for slight naming mismatches between login and Minecraft addon payload.
-            match = players.find((player) => {
-              const normalizedPlayerName = normalizeUserName(player.name);
-              return (
-                normalizedPlayerName.includes(normalizedUserName) ||
-                normalizedUserName.includes(normalizedPlayerName)
-              );
-            });
-          }
+          const match = byName.get(normalizedUserName);
 
           if (!match) {
             if (!hasMinecraftPosition(user)) {
