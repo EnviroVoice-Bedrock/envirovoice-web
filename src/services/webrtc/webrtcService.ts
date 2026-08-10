@@ -47,6 +47,8 @@ type RemoteAudioChain = {
   caveGain: GainNode;
   underwaterGain: GainNode;
   mountainGain: GainNode;
+  mountainDelay: DelayNode;
+  mountainFeedback: GainNode;
   buriedGain: GainNode;
   caveLowPass: BiquadFilterNode;
   cavePeaking: BiquadFilterNode;
@@ -381,6 +383,8 @@ export class WebRtcService {
       chain.caveGain.disconnect();
       chain.underwaterGain.disconnect();
       chain.mountainGain.disconnect();
+      chain.mountainDelay.disconnect();
+      chain.mountainFeedback.disconnect();
       chain.buriedGain.disconnect();
       chain.caveLowPass.disconnect();
       chain.cavePeaking.disconnect();
@@ -600,6 +604,8 @@ export class WebRtcService {
         const caveGain = this.remoteAudioContext.createGain();
         const underwaterGain = this.remoteAudioContext.createGain();
         const mountainGain = this.remoteAudioContext.createGain();
+        const mountainDelay = this.remoteAudioContext.createDelay(0.5);
+        const mountainFeedback = this.remoteAudioContext.createGain();
         const buriedGain = this.remoteAudioContext.createGain();
         const caveLowPass = this.remoteAudioContext.createBiquadFilter();
         const cavePeaking = this.remoteAudioContext.createBiquadFilter();
@@ -631,6 +637,9 @@ export class WebRtcService {
         mountainHighShelf.frequency.value = 3200;
         mountainHighShelf.gain.value = 5;
 
+        mountainDelay.delayTime.value = 0.14;
+        mountainFeedback.gain.value = 0.26;
+
         buriedLowPass.type = "lowpass";
         buriedLowPass.frequency.value = 520;
         buriedLowPass.Q.value = 0.85;
@@ -661,6 +670,10 @@ export class WebRtcService {
         mountainHighPass.connect(mountainHighShelf);
         mountainHighShelf.connect(mountainGain);
         mountainGain.connect(destination);
+        mountainGain.connect(mountainDelay);
+        mountainDelay.connect(destination);
+        mountainDelay.connect(mountainFeedback);
+        mountainFeedback.connect(mountainDelay);
 
         source.connect(buriedLowPass);
         buriedLowPass.connect(buriedLowShelf);
@@ -673,6 +686,8 @@ export class WebRtcService {
           caveGain,
           underwaterGain,
           mountainGain,
+          mountainDelay,
+          mountainFeedback,
           buriedGain,
           caveLowPass,
           cavePeaking,
@@ -739,8 +754,8 @@ export class WebRtcService {
     }
 
     if (effect === "mountain") {
-      chain.dryGain.gain.setTargetAtTime(0.78, now, 0.05);
-      chain.mountainGain.gain.setTargetAtTime(0.55, now, 0.05);
+      chain.dryGain.gain.setTargetAtTime(0.74, now, 0.05);
+      chain.mountainGain.gain.setTargetAtTime(0.48, now, 0.05);
       return;
     }
 
