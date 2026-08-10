@@ -141,6 +141,19 @@ const normalizeUserName = (name: string): string =>
 
 const PROXIMITY_MAX_DISTANCE = 50;
 
+const isAppleMobileBrowser = (): boolean => {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isWebKit = /AppleWebKit/i.test(ua);
+  const isCriOS = /CriOS/i.test(ua);
+  const isFxiOS = /FxiOS/i.test(ua);
+  return isIOS && isWebKit && !isCriOS && !isFxiOS;
+};
+
 const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDistance: number): number => {
   if (!hasMinecraftPosition(selfUser) || !hasMinecraftPosition(otherUser)) {
     return 0;
@@ -158,6 +171,10 @@ const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDist
 
   if (distance >= safeMaxDistance) {
     return 0;
+  }
+
+  if (isAppleMobileBrowser()) {
+    return 1;
   }
 
   return Math.max(0, Math.min(1, 1 - distance / safeMaxDistance));
@@ -347,6 +364,24 @@ export const useAppStore = create<AppState>((set, get) => {
 
     if (message.type === "user-joined") {
       logger.log("Rooms", "User joined", message.payload);
+
+      const { session, currentRoom, voiceStatus, isSelfMuted } = get();
+      if (!session || !currentRoom || voiceStatus !== "ready") {
+        return;
+      }
+
+      if (!message.roomId || currentRoom.id !== message.roomId) {
+        return;
+      }
+
+      const expectedPeerIds = currentRoom.users.map((user) => user.id);
+      if (message.from && message.from !== session.id && !expectedPeerIds.includes(message.from)) {
+        expectedPeerIds.push(message.from);
+      }
+
+      webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
+      webrtc.setMicrophoneEnabled(!isSelfMuted);
+      void webrtc.syncRoomPeers(expectedPeerIds);
       return;
     }
 
