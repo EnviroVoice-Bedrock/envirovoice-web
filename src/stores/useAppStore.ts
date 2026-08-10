@@ -139,97 +139,6 @@ const normalizeUserName = (name: string): string =>
     .replace(/§[0-9a-fk-or]/gi, "")
     .replace(/[^a-z0-9_-]/g, "");
 
-const getBoundedNameDistance = (a: string, b: string, maxDistance = 1): number => {
-  const lenA = a.length;
-  const lenB = b.length;
-
-  if (Math.abs(lenA - lenB) > maxDistance) {
-    return maxDistance + 1;
-  }
-
-  const matrix: number[][] = Array.from({ length: lenA + 1 }, () => Array(lenB + 1).fill(0));
-
-  for (let i = 0; i <= lenA; i += 1) {
-    matrix[i][0] = i;
-  }
-
-  for (let j = 0; j <= lenB; j += 1) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= lenA; i += 1) {
-    let rowMin = Number.POSITIVE_INFINITY;
-
-    for (let j = 1; j <= lenB; j += 1) {
-      const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
-      const next = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + substitutionCost
-      );
-
-      matrix[i][j] = next;
-      if (next < rowMin) {
-        rowMin = next;
-      }
-    }
-
-    if (rowMin > maxDistance) {
-      return maxDistance + 1;
-    }
-  }
-
-  return matrix[lenA][lenB];
-};
-
-const findMinecraftPlayerMatch = (
-  normalizedUserName: string,
-  byName: Map<string, MinecraftPlayerPosition>,
-  players: MinecraftPlayerPosition[]
-): MinecraftPlayerPosition | undefined => {
-  const exact = byName.get(normalizedUserName);
-  if (exact) {
-    return exact;
-  }
-
-  if (normalizedUserName.length < 4) {
-    return undefined;
-  }
-
-  let best: MinecraftPlayerPosition | undefined;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  let ties = 0;
-
-  for (const player of players) {
-    const normalizedPlayerName = normalizeUserName(player.name);
-    if (!normalizedPlayerName || normalizedPlayerName[0] !== normalizedUserName[0]) {
-      continue;
-    }
-
-    const distance = getBoundedNameDistance(normalizedUserName, normalizedPlayerName, 1);
-    if (distance > 1) {
-      continue;
-    }
-
-    if (distance < bestDistance) {
-      best = player;
-      bestDistance = distance;
-      ties = 0;
-      continue;
-    }
-
-    if (distance === bestDistance) {
-      ties += 1;
-    }
-  }
-
-  if (bestDistance === Number.POSITIVE_INFINITY || ties > 0) {
-    return undefined;
-  }
-
-  return best;
-};
-
 const computeMinecraftVolume = (selfUser: RoomUser, otherUser: RoomUser, maxDistance: number): number => {
   if (!hasMinecraftPosition(selfUser) || !hasMinecraftPosition(otherUser)) {
     return 0;
@@ -405,16 +314,6 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   };
 
-  const retryPeerSync = (): void => {
-    const { session, currentRoom, voiceStatus } = get();
-    if (!session || !currentRoom || voiceStatus !== "ready") {
-      return;
-    }
-
-    webrtc.setContext({ roomId: currentRoom.id, selfId: session.id });
-    void webrtc.syncRoomPeers(currentRoom.users.map((user) => user.id));
-  };
-
   signaling.onMessage((message) => {
     if (message.type === "room-state" && message.payload) {
       const room = message.payload as Room;
@@ -446,7 +345,6 @@ export const useAppStore = create<AppState>((set, get) => {
 
     if (message.type === "user-joined") {
       logger.log("Rooms", "User joined", message.payload);
-      retryPeerSync();
       return;
     }
 
@@ -493,9 +391,6 @@ export const useAppStore = create<AppState>((set, get) => {
 
     if (message.type === "error") {
       const payload = message.payload as { message?: string } | undefined;
-      if (payload?.message?.includes("target not found")) {
-        retryPeerSync();
-      }
       set({ errorMessage: payload?.message ?? "Unknown signaling error" });
     }
   });
@@ -617,7 +512,18 @@ export const useAppStore = create<AppState>((set, get) => {
         let changed = false;
         const users = state.currentRoom.users.map((user) => {
           const normalizedUserName = normalizeUserName(user.name);
-          const match = findMinecraftPlayerMatch(normalizedUserName, byName, players);
+          let match = byName.get(normalizedUserName);
+
+          if (!match) {
+            // Fallback for slight naming mismatches between login and Minecraft addon payload.
+            match = players.find((player) => {
+              const normalizedPlayerName = normalizeUserName(player.name);
+              return (
+                normalizedPlayerName.includes(normalizedUserName) ||
+                normalizedUserName.includes(normalizedPlayerName)
+              );
+            });
+          }
 
           if (!match) {
             if (!hasMinecraftPosition(user)) {
