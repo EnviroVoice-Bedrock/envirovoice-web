@@ -125,6 +125,13 @@ const hasMinecraftPosition = (user: RoomUser): boolean => {
   return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
 };
 
+const emptyMinecraftPosition = (): RoomUser["position"] => ({
+  x: 0,
+  y: 0,
+  z: 0,
+  dimension: "overworld"
+});
+
 const normalizeUserName = (name: string): string =>
   name
     .trim()
@@ -523,7 +530,15 @@ export const useAppStore = create<AppState>((set, get) => {
           }
 
           if (!match) {
-            return user;
+            if (!hasMinecraftPosition(user)) {
+              return user;
+            }
+
+            changed = true;
+            return {
+              ...user,
+              position: emptyMinecraftPosition()
+            };
           }
 
           if (

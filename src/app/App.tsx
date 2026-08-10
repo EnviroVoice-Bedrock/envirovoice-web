@@ -44,12 +44,6 @@ export const App = () => {
   } = useAppStore();
 
   const normalizeName = (name: string): string => name.trim().toLowerCase();
-  const formatMinecraftCoordinates = (player: MinecraftPlayerPosition): string =>
-    `${player.x.toFixed(1)}, ${player.y.toFixed(1)}, ${player.z.toFixed(1)}`;
-
-  const selfMinecraftPlayer = session
-    ? minecraftPlayers.find((player) => normalizeName(player.name) === normalizeName(session.name))
-    : null;
 
   const handleLogin = async (name: string, serverUrl: string): Promise<void> => {
     const isResetCommand = name.trim().toLowerCase() === "!reset" || serverUrl.trim().toLowerCase() === "!reset";
@@ -203,36 +197,6 @@ export const App = () => {
       {!session && <LoginPage onLogin={handleLogin} />}
 
       {session && currentRoom && (
-        <section className="minecraft-coordinates-banner" aria-label="Coordenadas de Minecraft">
-          <div className="minecraft-coordinates-banner-head">
-            <strong>Coordenadas de Minecraft</strong>
-            <span>{minecraftPlayers.length} jugadores</span>
-          </div>
-
-          {minecraftPlayers.length === 0 ? (
-            <p className="panel-note">Esperando posiciones desde minecraft.json...</p>
-          ) : (
-            <ul className="minecraft-coordinates-list">
-              {minecraftPlayers.map((player) => {
-                const isSelf = normalizeName(player.name) === normalizeName(session.name);
-
-                return (
-                  <li key={`coord-${player.name}`} className={isSelf ? "minecraft-coordinates-self" : ""}>
-                    <span className="minecraft-coordinates-name">{player.name}</span>
-                    <span className="minecraft-coordinates-value">{formatMinecraftCoordinates(player)}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          <p className="minecraft-coordinates-selfline">
-            Tu posición: {selfMinecraftPlayer ? formatMinecraftCoordinates(selfMinecraftPlayer) : "Sin coordenadas todavía"}
-          </p>
-        </section>
-      )}
-
-      {session && currentRoom && (
         <RoomPage
           room={currentRoom}
           userId={session.id}
@@ -247,7 +211,6 @@ export const App = () => {
           selfDeafened={isSelfDeafened}
           deafenedUsers={deafenedUsers}
           peerVolumes={peerVolumes}
-          firebaseBaseUri={firebaseBaseUri}
           onRefreshMicrophones={refreshMicrophones}
           onSetMicrophone={setMicrophone}
           onSetPeerVolume={setPeerVolume}

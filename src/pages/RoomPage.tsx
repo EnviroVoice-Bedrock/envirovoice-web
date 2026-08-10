@@ -8,7 +8,6 @@ import { useState } from "react";
 type Props = {
   room: Room;
   userId: string;
-  firebaseBaseUri: string;
   minecraftRoomUrl: string;
   minecraftPlayers: Array<{ name: string; x: number; y: number; z: number; dimension: string }>;
   minecraftMaxDistance: number;
@@ -42,15 +41,12 @@ const hasMinecraftPosition = (user: Room["users"][number]): boolean => {
   return !(p.x === 0 && p.y === 0 && p.z === 0 && p.dimension === "overworld");
 };
 
-const normalizeName = (name: string): string => name.trim().toLowerCase();
-
 const formatCoordinates = (user: Room["users"][number]): string =>
   `${user.position.x.toFixed(1)}, ${user.position.y.toFixed(1)}, ${user.position.z.toFixed(1)}`;
 
 export const RoomPage = ({
   room,
   userId,
-  firebaseBaseUri,
   minecraftRoomUrl,
   minecraftPlayers,
   minecraftMaxDistance,
@@ -102,12 +98,8 @@ export const RoomPage = ({
   const farUsers = usersWithDistance.filter((item) => !item.isNear);
 
   const visibleUsers = selfUser ? [selfUser, ...closeUsers.map((item) => item.user)] : room.users;
-  const normalizedBase = firebaseBaseUri.trim().endsWith("/") ? firebaseBaseUri.trim() : `${firebaseBaseUri.trim()}/`;
-  const minecraftEndpoint = `${normalizedBase}minecraft.json`;
-  const envirovoiceEndpoint = `${normalizedBase}envirovoice.json`;
   const roomUrlLabel = minecraftRoomUrl.trim() || "Esperando roomUrl de Minecraft";
-  const rawSelfPlayer = selfUser ? minecraftPlayers.find((player) => normalizeName(player.name) === normalizeName(selfUser.name)) : null;
-  const selfCoordinates = rawSelfPlayer ? `${rawSelfPlayer.x.toFixed(1)}, ${rawSelfPlayer.y.toFixed(1)}, ${rawSelfPlayer.z.toFixed(1)}` : selfUser && hasMinecraftPosition(selfUser) ? formatCoordinates(selfUser) : "Sin coordenadas";
+  const selfCoordinates = selfUser && hasMinecraftPosition(selfUser) ? formatCoordinates(selfUser) : "Sin coordenadas";
   const micStatusText =
     voiceStatus === "ready"
       ? "Voz activa"
@@ -140,24 +132,6 @@ export const RoomPage = ({
           <div className="nearby-users-head">
             <h2>Jugadores cerca ({safeMaxDistance} bloques)</h2>
             <span>{closeUsers.length}</span>
-          </div>
-
-          <div className="minecraft-raw-panel">
-            <small className="section-kicker">DATOS CRUDOS DEL ADDON</small>
-            {minecraftPlayers.length === 0 ? (
-              <p className="panel-note">Esperando jugadores desde minecraft.json...</p>
-            ) : (
-              <ul className="minecraft-raw-list">
-                {minecraftPlayers.map((player) => (
-                  <li key={`raw-${player.name}`}>
-                    <strong>{player.name}</strong>
-                    <span>
-                      {player.x.toFixed(1)}, {player.y.toFixed(1)}, {player.z.toFixed(1)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
 
           {closeUsers.length === 0 && <p className="panel-note">No hay jugadores dentro de {safeMaxDistance} bloques.</p>}
@@ -249,13 +223,10 @@ export const RoomPage = ({
             </button>
 
             <section className="admin-panel" aria-label="Panel admin">
-              <small className="section-kicker">ADMIN PANEL</small>
-              <p>Room URL: {roomUrlLabel}</p>
-              <p>URI base: {normalizedBase}</p>
-              <p>Datos del mundo: {minecraftEndpoint}</p>
-              <p>Sync de voz: {envirovoiceEndpoint}</p>
-              <p>MaxDistance: {safeMaxDistance}</p>
-              <p>Tu posición: {selfCoordinates}</p>
+              <small className="section-kicker">ESTADO DE MINECRAFT</small>
+              <p>Sala activa: {roomUrlLabel}</p>
+              <p>Rango de voz: {safeMaxDistance} bloques</p>
+              <p>Tu posicion: {selfCoordinates}</p>
               <ul>
                 {visibleUsers.map((user) => (
                   <li key={`talk-${user.id}`}>

@@ -6,6 +6,9 @@ type Props = {
 };
 
 const FIREBASE_URI_EXAMPLE = "https://tu-proyecto-default-rtdb.region.firebasedatabase.app/";
+const REMEMBER_LOGIN_KEY = "envirovoice-remember-login";
+const REMEMBERED_NAME_KEY = "envirovoice-remembered-name";
+const REMEMBERED_SERVER_URL_KEY = "envirovoice-remembered-server-url";
 
 const getAvatarUrl = (playerName: string): string => {
   const safeName = playerName.trim() || "WprousG";
@@ -15,6 +18,7 @@ const getAvatarUrl = (playerName: string): string => {
 export const LoginPage = ({ onLogin }: Props) => {
   const [name, setName] = useState("");
   const [serverUrl, setServerUrl] = useState("");
+  const [rememberLogin, setRememberLogin] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -22,6 +26,16 @@ export const LoginPage = ({ onLogin }: Props) => {
     if (storedTheme === "dark" || storedTheme === "light") {
       setTheme(storedTheme);
     }
+
+    const shouldRemember = window.localStorage.getItem(REMEMBER_LOGIN_KEY) === "true";
+    setRememberLogin(shouldRemember);
+
+    if (!shouldRemember) {
+      return;
+    }
+
+    setName(window.localStorage.getItem(REMEMBERED_NAME_KEY) ?? "");
+    setServerUrl(window.localStorage.getItem(REMEMBERED_SERVER_URL_KEY) ?? "");
   }, []);
 
   const toggleTheme = (): void => {
@@ -50,6 +64,17 @@ export const LoginPage = ({ onLogin }: Props) => {
         <form
           onSubmit={(event) => {
             event.preventDefault();
+
+            if (rememberLogin) {
+              window.localStorage.setItem(REMEMBER_LOGIN_KEY, "true");
+              window.localStorage.setItem(REMEMBERED_NAME_KEY, name.trim());
+              window.localStorage.setItem(REMEMBERED_SERVER_URL_KEY, serverUrl.trim());
+            } else {
+              window.localStorage.setItem(REMEMBER_LOGIN_KEY, "false");
+              window.localStorage.removeItem(REMEMBERED_NAME_KEY);
+              window.localStorage.removeItem(REMEMBERED_SERVER_URL_KEY);
+            }
+
             onLogin(name, serverUrl);
           }}
         >
@@ -71,6 +96,16 @@ export const LoginPage = ({ onLogin }: Props) => {
             placeholder="WprousG"
             autoComplete="off"
           />
+
+          <label className="remember-login-toggle" htmlFor="remember-login">
+            <input
+              id="remember-login"
+              type="checkbox"
+              checked={rememberLogin}
+              onChange={(event) => setRememberLogin(event.target.checked)}
+            />
+            <span>Recordar datos</span>
+          </label>
 
           <div className="simple-user-preview">
             <img src={getAvatarUrl(playerName)} alt={`Avatar de ${playerName}`} />
