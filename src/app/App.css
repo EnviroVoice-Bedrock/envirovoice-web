@@ -399,7 +399,7 @@ button:disabled {
   min-height: 112px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
   padding: 14px 22px;
@@ -410,6 +410,7 @@ button:disabled {
 .dock-block {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .dock-block small {
@@ -423,6 +424,11 @@ button:disabled {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 8px;
+  min-width: 0;
+}
+
+.dock-select-row select {
+  min-width: 0;
 }
 
 .dock-actions {
@@ -840,10 +846,15 @@ input[type="range"] {
   .room-bottom-dock {
     grid-template-columns: 1fr;
     padding: 12px;
+    gap: 12px;
   }
 
-  .dock-status-button {
-    width: 100%;
+  .room-settings-popover {
+    top: 118px;
+    right: 12px;
+    width: calc(100% - 24px);
+    max-height: calc(100vh - 240px);
+    overflow: auto;
   }
 
   .dock-actions {

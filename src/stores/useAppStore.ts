@@ -746,14 +746,12 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     logout: async () => {
-      const { currentRoom } = get();
+      const { session, currentRoom } = get();
+      const roomId = currentRoom?.id;
+      const userId = session?.id;
+      const userName = session?.name;
 
-      if (currentRoom) {
-        await get().leaveRoom();
-      }
-
-      signaling.disconnect();
-
+      // Clear local state first to prevent auto-rejoin side effects during async cleanup.
       set({
         session: null,
         rooms: [],
@@ -774,8 +772,24 @@ export const useAppStore = create<AppState>((set, get) => {
       });
 
       clearAllPeerRecoveryTimers();
-
       webrtc.reset();
+
+      if (roomId && userId) {
+        signaling.send({
+          type: "leave-room",
+          roomId,
+          from: userId,
+          payload: { userName }
+        });
+
+        try {
+          await apiClient.leaveRoom(roomId, userId);
+        } catch (err) {
+          logger.error("Rooms", "Failed to leave room through API during logout", err);
+        }
+      }
+
+      signaling.disconnect();
     },
 
     resetForTesting: async () => {
