@@ -4,6 +4,7 @@ import { roomService } from "../rooms/roomService.js";
 import { signalingMessageSchema, type SignalingMessage } from "../types/signaling.js";
 
 const MAX_MESSAGE_SIZE = 16_384;
+const MAX_PENDING_DIRECT_MESSAGES = 48;
 
 type ClientSession = {
   socket: WebSocket;
@@ -13,6 +14,7 @@ type ClientSession = {
 
 const clients = new Map<WebSocket, ClientSession>();
 const allSockets = new Set<WebSocket>();
+const pendingDirectMessages = new Map<string, SignalingMessage[]>();
 
 const safeSend = (socket: WebSocket, message: SignalingMessage): void => {
   if (socket.readyState === socket.OPEN) {
@@ -93,6 +95,55 @@ const forwardDirect = (fromSocket: WebSocket, message: SignalingMessage): boolea
   return false;
 };
 
+const queueDirectMessage = (message: SignalingMessage): boolean => {
+  if (!message.to) {
+    return false;
+  }
+
+  const queued = pendingDirectMessages.get(message.to) ?? [];
+  if (queued.length >= MAX_PENDING_DIRECT_MESSAGES) {
+    queued.shift();
+  }
+
+  queued.push(message);
+  pendingDirectMessages.set(message.to, queued);
+  return true;
+};
+
+const flushPendingDirectMessages = (socket: WebSocket, userId: string, roomId: string): void => {
+  const queued = pendingDirectMessages.get(userId);
+  if (!queued?.length) {
+    return;
+  }
+
+  const delivered: SignalingMessage[] = [];
+  const remaining: SignalingMessage[] = [];
+
+  for (const message of queued) {
+    if (message.roomId && message.roomId !== roomId) {
+      remaining.push(message);
+      continue;
+    }
+
+    safeSend(socket, message);
+    delivered.push(message);
+  }
+
+  if (remaining.length > 0) {
+    pendingDirectMessages.set(userId, remaining);
+  } else {
+    pendingDirectMessages.delete(userId);
+  }
+
+  if (delivered.length > 0) {
+    console.info("[Signaling] Flushed queued direct messages", {
+      userId,
+      roomId,
+      count: delivered.length
+    });
+  }
+};
+
 export const attachWebSocketServer = (server: HttpServer): void => {
   const wsServer = new WebSocketServer({ server });
 
@@ -140,6 +191,8 @@ export const attachWebSocketServer = (server: HttpServer): void => {
           roomId: message.roomId,
           userId: message.from
         });
+
+        flushPendingDirectMessages(socket, message.from, message.roomId);
 
         console.info("[Room] User joined", { roomId: message.roomId, userId: message.from });
         broadcastToRoom(
@@ -198,10 +251,7 @@ export const attachWebSocketServer = (server: HttpServer): void => {
       if (message.type === "offer") {
         console.info("[Signaling] Offer", { roomId: message.roomId, from: message.from, to: message.to });
         if (!forwardDirect(socket, message)) {
-          safeSend(socket, {
-            type: "error",
-            payload: { message: "Offer target not found" }
-          });
+          queueDirectMessage(message);
         }
         return;
       }
@@ -209,10 +259,7 @@ export const attachWebSocketServer = (server: HttpServer): void => {
       if (message.type === "answer") {
         console.info("[Signaling] Answer", { roomId: message.roomId, from: message.from, to: message.to });
         if (!forwardDirect(socket, message)) {
-          safeSend(socket, {
-            type: "error",
-            payload: { message: "Answer target not found" }
-          });
+          queueDirectMessage(message);
         }
         return;
       }
@@ -220,10 +267,7 @@ export const attachWebSocketServer = (server: HttpServer): void => {
       if (message.type === "ice-candidate") {
         console.info("[Signaling] ICE candidate", { roomId: message.roomId, from: message.from, to: message.to });
         if (!forwardDirect(socket, message)) {
-          safeSend(socket, {
-            type: "error",
-            payload: { message: "ICE target not found" }
-          });
+          queueDirectMessage(message);
         }
         return;
       }
