@@ -54,11 +54,12 @@ const sendRoomsState = (): void => {
   }
 };
 
-const forwardDirect = (fromSocket: WebSocket, message: SignalingMessage): void => {
+const forwardDirect = (fromSocket: WebSocket, message: SignalingMessage): boolean => {
   if (!message.to) {
-    return;
+    return false;
   }
 
+  // First try strict match (same user + same room when provided).
   for (const [socket, session] of clients.entries()) {
     if (socket === fromSocket) {
       continue;
@@ -66,9 +67,30 @@ const forwardDirect = (fromSocket: WebSocket, message: SignalingMessage): void =
 
     if (session.userId === message.to && (!message.roomId || session.roomId === message.roomId)) {
       safeSend(socket, message);
-      return;
+      return true;
     }
   }
+
+  // Fallback: if room mapping is stale, still forward by user id.
+  for (const [socket, session] of clients.entries()) {
+    if (socket === fromSocket) {
+      continue;
+    }
+
+    if (session.userId === message.to) {
+      console.warn("[Signaling] Forwarded with roomId mismatch fallback", {
+        type: message.type,
+        from: message.from,
+        to: message.to,
+        roomId: message.roomId,
+        targetRoomId: session.roomId
+      });
+      safeSend(socket, message);
+      return true;
+    }
+  }
+
+  return false;
 };
 
 export const attachWebSocketServer = (server: HttpServer): void => {
@@ -175,19 +197,34 @@ export const attachWebSocketServer = (server: HttpServer): void => {
 
       if (message.type === "offer") {
         console.info("[Signaling] Offer", { roomId: message.roomId, from: message.from, to: message.to });
-        forwardDirect(socket, message);
+        if (!forwardDirect(socket, message)) {
+          safeSend(socket, {
+            type: "error",
+            payload: { message: "Offer target not found" }
+          });
+        }
         return;
       }
 
       if (message.type === "answer") {
         console.info("[Signaling] Answer", { roomId: message.roomId, from: message.from, to: message.to });
-        forwardDirect(socket, message);
+        if (!forwardDirect(socket, message)) {
+          safeSend(socket, {
+            type: "error",
+            payload: { message: "Answer target not found" }
+          });
+        }
         return;
       }
 
       if (message.type === "ice-candidate") {
         console.info("[Signaling] ICE candidate", { roomId: message.roomId, from: message.from, to: message.to });
-        forwardDirect(socket, message);
+        if (!forwardDirect(socket, message)) {
+          safeSend(socket, {
+            type: "error",
+            payload: { message: "ICE target not found" }
+          });
+        }
         return;
       }
 
