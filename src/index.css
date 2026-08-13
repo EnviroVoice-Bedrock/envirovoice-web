@@ -1,0 +1,97 @@
+:root,
+[data-theme='dark'] {
+  --bg-void: #000000;
+  --surface: #131313;
+  --surface-raised: #1a1a1a;
+  --border: #262626;
+  --border-strong: #333333;
+  --accent-brand: #5b8def;
+  --accent-brand-dim: rgba(91, 141, 239, 0.15);
+  --accent-live: #34d399;
+  --accent-danger: #f0575a;
+  --accent-danger-dim: rgba(240, 87, 90, 0.1);
+  --text-primary: #edeff3;
+  --text-secondary: #8891a0;
+  --text-muted: #5a6272;
+  --avatar-bg: #0e1015;
+  --grid-line: rgba(255, 255, 255, 0.05);
+  --blob-1: rgba(30, 58, 110, 0.35);
+  --blob-2: rgba(20, 40, 80, 0.25);
+  --panel-bg: rgba(19, 19, 19, 0.5);
+
+  --font-ui: 'Inter', sans-serif;
+  --font-logo: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+[data-theme='light'] {
+  --bg-void: #f4f5f7;
+  --surface: #ffffff;
+  --surface-raised: #eef0f3;
+  --border: #e1e4e9;
+  --border-strong: #c7cbd3;
+  --accent-brand: #3b6fe0;
+  --accent-brand-dim: rgba(59, 111, 224, 0.12);
+  --accent-live: #17975e;
+  --accent-danger: #d63f42;
+  --accent-danger-dim: rgba(214, 63, 66, 0.1);
+  --text-primary: #14171d;
+  --text-secondary: #565f70;
+  --text-muted: #8b93a3;
+  --avatar-bg: #e4e6ea;
+  --grid-line: rgba(0, 0, 0, 0.045);
+  --blob-1: rgba(150, 180, 255, 0.35);
+  --blob-2: rgba(180, 200, 255, 0.3);
+  --panel-bg: rgba(255, 255, 255, 0.65);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 900px 700px at 75% 15%, var(--blob-1) 0%, transparent 60%),
+    radial-gradient(ellipse 800px 600px at 15% 85%, var(--blob-2) 0%, transparent 60%),
+    var(--bg-void);
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  min-height: 100vh;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: grid-drift 20s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes grid-drift {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 48px 48px, 48px 48px;
+  }
+}
+
+button {
+  font-family: inherit;
+}

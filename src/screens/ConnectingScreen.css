@@ -1,0 +1,111 @@
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  min-height: 20px;
+}
+.status-row.fail {
+  color: var(--accent-danger);
+}
+.status-row.ok {
+  color: var(--accent-live);
+}
+
+.spinner {
+  width: 15px;
+  height: 15px;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.steps {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 20px;
+}
+.step-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: background 0.2s ease;
+}
+.step-dot.done {
+  background: var(--accent-live);
+}
+.step-dot.active {
+  background: var(--accent-brand);
+}
+.step-dot.fail {
+  background: var(--accent-danger);
+}
+
+.retry-btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.retry-btn:hover {
+  background: var(--surface-raised);
+}
+.retry-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.retry-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+.retry-actions .retry-btn {
+  margin-top: 0;
+}
+
+.retry-primary-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent-brand);
+  color: #0a1428;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: filter 0.15s ease;
+}
+.retry-primary-btn:hover {
+  filter: brightness(1.08);
+}
+.retry-primary-btn svg {
+  width: 15px;
+  height: 15px;
+}

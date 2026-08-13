@@ -1,0 +1,57 @@
+.logo {
+  position: fixed;
+  top: 32px;
+  left: 32px;
+  font-family: var(--font-logo);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  z-index: 20;
+}
+.logo-accent {
+  color: var(--accent-brand);
+}
+.logo-rest {
+  color: var(--text-primary);
+}
+
+.logo-inline {
+  position: static;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+#mainPanel {
+  position: relative;
+  margin: 25vh auto 0;
+  width: 360px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 28px 28px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  overflow: hidden;
+  z-index: 10;
+}
+
+#mainPanel.wide {
+  width: calc(100vw - 64px);
+  max-width: 1700px;
+  min-height: calc(100vh - 104px);
+  margin-top: 72px;
+  padding: 0;
+  border-radius: 18px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-screen-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
